@@ -1,0 +1,42 @@
+from datetime import datetime, UTC
+from typing import Optional, List
+
+from sqlalchemy import Column, Text
+from sqlmodel import Field, Relationship, SQLModel
+
+
+def utcnow() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+class AgentRun(SQLModel, table=True):
+    """Agent 运行记录"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    project_id: int = Field(foreign_key="project.id", index=True)
+    status: str = Field(default="queued")  # queued|running|succeeded|failed
+    current_agent: Optional[str] = None
+    progress: float = Field(default=0.0, ge=0.0, le=1.0)
+    route_decision: Optional[str] = Field(default=None, sa_column=Column(Text))
+    patch_plan: Optional[str] = Field(default=None, sa_column=Column(Text))
+    error: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+    messages: List["AgentMessage"] = Relationship(
+        back_populates="run",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "lazy": "selectin"},
+    )
+
+
+class AgentMessage(SQLModel, table=True):
+    """Agent 消息记录"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    run_id: int = Field(foreign_key="agentrun.id", index=True)
+    agent: str
+    role: str  # system|user|assistant|tool
+    content: str
+    created_at: datetime = Field(default_factory=utcnow)
+
+    run: Optional[AgentRun] = Relationship(back_populates="messages")

@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: openoii
+      POSTGRES_PASSWORD: openoii_dev
+      POSTGRES_DB: openoii
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U openoii"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 生产模式下的后端服务（开发时注释掉）
+  # backend:
+  #   build: ./backend
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql+asyncpg://openoii:openoii_dev@postgres:5432/openoii
+  #     REDIS_URL: redis://redis:6379/0
+  #   ports:
+  #     - "18765:18765"
+  #
+  # 前端服务（可选：开发时通常手动启动）
+  # frontend:
+  #   build: ./frontend
+  #   depends_on:
+  #     - backend
+  #   ports:
+  #     - "15173:15173"
+
+volumes:
+  postgres_data:
+  redis_data:

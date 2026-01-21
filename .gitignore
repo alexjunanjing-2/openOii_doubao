@@ -1,0 +1,15 @@
+.ace-tool/
+.claude
+.logs
+.pids
+.serena
+.uv-cache
+.ruff_cache
+.vscode
+.env
+.kiro
+**/__pycache__/
+.shared
+node_modules
+.playwright-mcp
+dist

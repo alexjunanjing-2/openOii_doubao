@@ -1,0 +1,52 @@
+import { clsx } from "clsx";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "secondary" | "accent" | "ghost" | "error";
+  size?: "sm" | "md" | "lg";
+  loading?: boolean;
+  children: ReactNode;
+}
+
+export function Button({
+  variant = "primary",
+  size = "md",
+  loading = false,
+  className,
+  children,
+  disabled,
+  ...props
+}: ButtonProps) {
+  const baseStyles = "btn-doodle font-heading cursor-pointer";
+  
+  const variantStyles = {
+    primary: "bg-primary text-primary-content hover:bg-primary/90",
+    secondary: "bg-secondary text-secondary-content hover:bg-secondary/90",
+    accent: "bg-accent text-accent-content hover:bg-accent/90",
+    ghost: "bg-transparent border-transparent shadow-none hover:bg-base-200 hover:shadow-brutal-sm",
+    error: "bg-error text-error-content hover:bg-error/90",
+  };
+
+  const sizeStyles = {
+    sm: "px-3 py-1.5 text-sm",
+    md: "px-5 py-2.5 text-base",
+    lg: "px-7 py-3 text-lg",
+  };
+
+  return (
+    <button
+      className={clsx(
+        baseStyles,
+        variantStyles[variant],
+        sizeStyles[size],
+        loading && "loading",
+        disabled && "opacity-50 cursor-not-allowed",
+        className
+      )}
+      disabled={disabled || loading}
+      {...props}
+    >
+      {loading ? <span className="loading loading-spinner loading-sm" /> : children}
+    </button>
+  );
+}

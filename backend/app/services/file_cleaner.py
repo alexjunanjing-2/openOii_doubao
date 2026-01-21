@@ -1,0 +1,79 @@
+"""文件清理服务
+
+负责删除旧的图片和视频文件，避免磁盘空间浪费。
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from pathlib import Path
+from urllib.parse import urlparse
+
+logger = logging.getLogger(__name__)
+
+# 静态文件目录
+STATIC_DIR = Path(__file__).parent.parent.parent / "static"
+
+
+def is_local_file(url: str | None) -> bool:
+    """判断 URL 是否指向本地文件"""
+    if not url:
+        return False
+    # 本地文件路径以 /static/ 开头
+    return url.startswith("/static/")
+
+
+def get_local_path(url: str) -> Path | None:
+    """将本地 URL 转换为文件系统路径"""
+    if not is_local_file(url):
+        return None
+    # /static/videos/xxx.mp4 -> backend/static/videos/xxx.mp4
+    relative_path = url.lstrip("/static/")
+    return STATIC_DIR / relative_path
+
+
+def delete_file(url: str | None) -> bool:
+    """删除本地文件
+
+    Args:
+        url: 文件 URL（如 /static/videos/xxx.mp4）
+
+    Returns:
+        是否成功删除
+    """
+    if not url:
+        return False
+
+    path = get_local_path(url)
+    if not path:
+        logger.debug(f"Not a local file, skipping: {url}")
+        return False
+
+    if not path.exists():
+        logger.debug(f"File not found, skipping: {path}")
+        return False
+
+    try:
+        os.remove(path)
+        logger.info(f"Deleted file: {path}")
+        return True
+    except OSError as e:
+        logger.warning(f"Failed to delete file {path}: {e}")
+        return False
+
+
+def delete_files(urls: list[str | None]) -> int:
+    """批量删除本地文件
+
+    Args:
+        urls: 文件 URL 列表
+
+    Returns:
+        成功删除的文件数量
+    """
+    count = 0
+    for url in urls:
+        if delete_file(url):
+            count += 1
+    return count

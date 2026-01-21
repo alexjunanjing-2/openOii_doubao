@@ -1,0 +1,133 @@
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:18765";
+
+/**
+ * 将后端静态文件路径转换为完整 URL
+ * @param path 后端返回的路径，如 "/static/videos/xxx.mp4"
+ * @returns 完整 URL，如 "http://localhost:18765/static/videos/xxx.mp4"
+ */
+export function getStaticUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  // 如果已经是完整 URL，直接返回
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  // 拼接 API_BASE
+  return `${API_BASE}${path}`;
+}
+
+async function fetchApi<T>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...options?.headers,
+    },
+  });
+  if (!res.ok) {
+    throw new Error(`API Error: ${res.status} ${res.statusText}`);
+  }
+  // 处理 204 No Content 响应
+  if (res.status === 204 || res.headers.get("content-length") === "0") {
+    return undefined as T;
+  }
+  return res.json();
+}
+
+// Projects API
+export const projectsApi = {
+  list: () => fetchApi<import("~/types").Project[]>("/api/v1/projects"),
+  
+  get: (id: number) => fetchApi<import("~/types").Project>(`/api/v1/projects/${id}`),
+  
+  create: (data: { title: string; story?: string; style?: string }) =>
+    fetchApi<import("~/types").Project>("/api/v1/projects", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  
+  update: (id: number, data: Partial<import("~/types").Project>) =>
+    fetchApi<import("~/types").Project>(`/api/v1/projects/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  
+  delete: (id: number) =>
+    fetchApi<void>(`/api/v1/projects/${id}`, { method: "DELETE" }),
+  
+  getCharacters: (id: number) =>
+    fetchApi<import("~/types").Character[]>(`/api/v1/projects/${id}/characters`),
+  
+  getScenes: (id: number) =>
+    fetchApi<import("~/types").Scene[]>(`/api/v1/projects/${id}/scenes`),
+  
+  getShots: (id: number) =>
+    fetchApi<import("~/types").Shot[]>(`/api/v1/projects/${id}/shots`),
+
+  getMessages: (id: number) =>
+    fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
+
+  generate: (id: number, data?: { seed?: number; notes?: string }) =>
+    fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
+      method: "POST",
+      body: JSON.stringify(data || {}),
+    }),
+
+  cancel: (id: number) =>
+    fetchApi<{ status: string; cancelled: number }>(`/api/v1/projects/${id}/cancel`, {
+      method: "POST",
+    }),
+
+  feedback: (id: number, content: string, runId?: number) =>
+    fetchApi<{ status: string }>(`/api/v1/projects/${id}/feedback`, {
+      method: "POST",
+      body: JSON.stringify({ content, run_id: runId }),
+    }),
+};
+
+// Shots API
+export const shotsApi = {
+  update: (id: number, data: Partial<import("~/types").Shot>) =>
+    fetchApi<import("~/types").Shot>(`/api/v1/shots/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  regenerate: (id: number, type: "image" | "video") =>
+    fetchApi<import("~/types").AgentRun>(`/api/v1/shots/${id}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify({ type }),
+    }),
+  delete: (id: number) =>
+    fetchApi<void>(`/api/v1/shots/${id}`, { method: "DELETE" }),
+};
+
+// Characters API
+export const charactersApi = {
+  update: (id: number, data: Partial<import("~/types").Character>) =>
+    fetchApi<import("~/types").Character>(`/api/v1/characters/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  regenerate: (id: number) =>
+    fetchApi<import("~/types").AgentRun>(`/api/v1/characters/${id}/regenerate`, {
+      method: "POST",
+      body: JSON.stringify({ type: "image" }),
+    }),
+  delete: (id: number) =>
+    fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
+};
+
+// Scenes API
+export const scenesApi = {
+  update: (id: number, data: Partial<import("~/types").Scene>) =>
+    fetchApi<import("~/types").Scene>(`/api/v1/scenes/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+  delete: (id: number) =>
+    fetchApi<void>(`/api/v1/scenes/${id}`, {
+      method: "DELETE",
+    }),
+};
