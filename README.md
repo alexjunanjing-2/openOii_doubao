@@ -106,6 +106,8 @@ ReviewAgent (用户反馈处理)
 
 **适合快速体验和生产部署**
 
+> 💡 **默认使用 GitHub 预构建镜像**，无需本地构建，启动更快！
+
 1. **配置环境变量**
 
 ```bash
@@ -166,7 +168,11 @@ environment:
 2. **启动服务**
 
 ```bash
+# 使用 GitHub 预构建镜像（推荐）
 docker-compose up -d
+
+# 或者本地构建镜像（适合开发调试）
+docker-compose -f docker-compose.dev.yml up -d
 ```
 
 3. **访问应用**
@@ -185,6 +191,10 @@ docker-compose logs -f backend
 
 # 修改配置后重启
 docker-compose restart backend
+
+# 更新到最新镜像
+docker-compose pull
+docker-compose up -d
 
 # 停止服务
 docker-compose down
