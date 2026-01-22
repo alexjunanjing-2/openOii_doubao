@@ -2,12 +2,17 @@
 
 <div align="center">
 
+<img src="./doc/logo.png" width="200" alt="openOii Logo" />
+
 **基于多智能体协作的漫剧创作平台，让创意变成现实**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18.3+-61dafb.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178c6.svg)](https://www.typescriptlang.org/)
+
+### ⭐ 如果这个项目对你有帮助，请给个 Star 支持一下！
+
 
 </div>
 
