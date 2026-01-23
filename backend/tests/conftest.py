@@ -67,16 +67,32 @@ async def app(test_session: AsyncSession, test_settings: Settings, ws_manager: S
     async def override_get_session() -> AsyncGenerator[AsyncSession, None]:
         yield test_session
 
+    async def override_get_settings() -> Settings:
+        return test_settings
+
+    async def override_get_ws() -> StubWsManager:
+        return ws_manager
+
     app.dependency_overrides[get_db_session] = override_get_session
-    app.dependency_overrides[get_app_settings] = lambda: test_settings
-    app.dependency_overrides[get_ws_manager] = lambda: ws_manager
+    app.dependency_overrides[get_app_settings] = override_get_settings
+    app.dependency_overrides[get_ws_manager] = override_get_ws
     return app
 
 
 @pytest_asyncio.fixture(scope="function")
 async def async_client(app):
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+
+    class _AsyncClientWithYield(AsyncClient):
+        async def request(self, *args, **kwargs):
+            loop = asyncio.get_running_loop()
+            task = loop.create_task(super().request(*args, **kwargs))
+            # ASGITransport + body-carrying requests can deadlock on this runtime
+            # unless the request coroutine gets at least one scheduling slice.
+            await asyncio.sleep(0.01)
+            return await task
+
+    async with _AsyncClientWithYield(transport=transport, base_url="http://test") as client:
         yield client
 
 

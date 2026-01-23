@@ -59,30 +59,35 @@ export function EditModal({
         </button>
 
         <div className="space-y-4">
-          {fields.map((field) => (
-            <div key={field.name} className="form-control">
-              <label className="label">
-                <span className="label-text">{field.label}</span>
-              </label>
-              {field.type === "textarea" ? (
-                <textarea
-                  name={field.name}
-                  value={formData[field.name] || ""}
-                  onChange={handleChange}
-                  className="textarea textarea-bordered h-24 input-doodle"
-                  rows={4}
-                />
-              ) : (
-                <input
-                  type="text"
-                  name={field.name}
-                  value={formData[field.name] || ""}
-                  onChange={handleChange}
-                  className="input input-bordered input-doodle"
-                />
-              )}
-            </div>
-          ))}
+          {fields.map((field) => {
+            const id = `edit-modal-${field.name}`;
+            return (
+              <div key={field.name} className="form-control">
+                <label htmlFor={id} className="label">
+                  <span className="label-text">{field.label}</span>
+                </label>
+                {field.type === "textarea" ? (
+                  <textarea
+                    id={id}
+                    name={field.name}
+                    value={formData[field.name] || ""}
+                    onChange={handleChange}
+                    className="textarea textarea-bordered h-24 input-doodle"
+                    rows={4}
+                  />
+                ) : (
+                  <input
+                    id={id}
+                    type="text"
+                    name={field.name}
+                    value={formData[field.name] || ""}
+                    onChange={handleChange}
+                    className="input input-bordered input-doodle"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <div className="modal-action mt-6">

@@ -46,7 +46,7 @@ export function ConfirmModal({
   const styles = variantStyles[variant];
 
   return (
-    <dialog className="modal modal-open">
+    <dialog className="modal modal-open" open>
       <div className="modal-box bg-base-100 border-3 border-base-content/30 shadow-brutal">
         <div className="flex items-start gap-4">
           {/* 图标 */}

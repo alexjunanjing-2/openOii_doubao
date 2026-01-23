@@ -21,7 +21,7 @@ class StoryboardArtistAgent(BaseAgent):
         super().__init__()
         self.image_composer = ImageComposer()
 
-    def _build_image_prompt(self, shot: Shot, characters: list[Character]) -> str:
+    def _build_image_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
         """构建首帧图片生成 prompt"""
         # 优先使用 image_prompt，否则使用 description
         desc = shot.image_prompt or shot.description
@@ -31,6 +31,9 @@ class StoryboardArtistAgent(BaseAgent):
         char_context = build_character_context(characters)
         if char_context:
             parts.append(char_context)
+
+        if style.strip():
+            parts.append(f"Style: {style.strip()}")
 
         return ", ".join(parts)
 
@@ -96,20 +99,15 @@ class StoryboardArtistAgent(BaseAgent):
                     message=f"   正在绘制分镜 {i+1}/{total}...",
                 )
 
-                image_prompt = self._build_image_prompt(shot, characters)
+                image_prompt = self._build_image_prompt(shot, characters, style=ctx.project.style)
 
-                # 添加超时机制（8分钟）
-                try:
-                    image_url = await asyncio.wait_for(
-                        self.generate_and_cache_image(
-                            ctx,
-                            prompt=image_prompt,
-                            image_bytes=reference_image_bytes if use_i2i else None,
-                        ),
-                        timeout=480.0  # 8 分钟超时
-                    )
-                except asyncio.TimeoutError:
-                    raise RuntimeError(f"图片生成超时（超过8分钟）")
+                # 仅对 URL 生成阶段加超时（8分钟），缓存/下载不受此超时影响
+                image_url = await self.generate_and_cache_image(
+                    ctx,
+                    prompt=image_prompt,
+                    image_bytes=reference_image_bytes if use_i2i else None,
+                    timeout_s=480.0,
+                )
 
                 shot.image_url = image_url
                 ctx.session.add(shot)

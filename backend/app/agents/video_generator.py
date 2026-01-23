@@ -17,7 +17,7 @@ class VideoGeneratorAgent(BaseAgent):
         super().__init__()
         self.image_composer = ImageComposer()
 
-    def _build_video_prompt(self, shot: Shot, characters: list[Character]) -> str:
+    def _build_video_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
         """构建视频生成 prompt"""
         # 优先使用 prompt（由 Scriptwriter 生成的 video_prompt）
         desc = shot.prompt or shot.description
@@ -27,6 +27,9 @@ class VideoGeneratorAgent(BaseAgent):
         char_context = build_character_context(characters)
         if char_context:
             parts.append(char_context)
+
+        if style.strip():
+            parts.append(f"Style: {style.strip()}")
 
         return ", ".join(parts)
 
@@ -89,7 +92,7 @@ class VideoGeneratorAgent(BaseAgent):
                     message=f"   正在生成视频 {i+1}/{total}...",
                 )
 
-                video_prompt = self._build_video_prompt(shot, characters)
+                video_prompt = self._build_video_prompt(shot, characters, style=ctx.project.style)
                 duration = self._get_duration(shot, default_duration)
 
                 # 根据服务类型选择不同的调用方式

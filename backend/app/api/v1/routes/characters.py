@@ -138,6 +138,7 @@ async def _run_agent_plan(
 
 
 @router.put("/{character_id}", response_model=CharacterRead)
+@router.patch("/{character_id}", response_model=CharacterRead)
 async def update_character(
     character_id: int,
     payload: CharacterUpdate,

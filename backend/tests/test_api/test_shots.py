@@ -1,8 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
+from app.api.v1.routes import shots as shots_routes
+
 from tests.factories import create_project, create_scene, create_shot
+
+
+def _immediate_task(coro):
+    loop = asyncio.get_running_loop()
+    coro.close()
+    fut = loop.create_future()
+    fut.set_result(None)
+    return fut
 
 
 @pytest.mark.asyncio
@@ -46,6 +58,8 @@ async def test_update_shot_not_found(async_client):
 
 @pytest.mark.asyncio
 async def test_regenerate_shot(async_client, test_session, monkeypatch):
+    monkeypatch.setattr(shots_routes.asyncio, "create_task", _immediate_task)
+
     project = await create_project(test_session)
     scene = await create_scene(test_session, project_id=project.id)
     shot = await create_shot(test_session, scene_id=scene.id)
@@ -57,4 +71,4 @@ async def test_regenerate_shot(async_client, test_session, monkeypatch):
     # This would need proper mocking of the actual service
     res = await async_client.post(f"/api/v1/shots/{shot.id}/regenerate")
     # The actual implementation might return different status codes
-    assert res.status_code in [200, 202, 404]  # Adjust based on actual implementation
+    assert res.status_code in [200, 201, 202, 404]  # Adjust based on actual implementation

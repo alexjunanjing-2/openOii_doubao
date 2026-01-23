@@ -11,6 +11,7 @@ from app.api.deps import SessionDep, SettingsDep, WsManagerDep
 from app.config import Settings
 from app.db.session import async_session_maker
 from app.models.agent_run import AgentMessage, AgentRun
+from app.models.message import Message
 from app.models.project import Project
 from app.schemas.project import AgentRunRead, FeedbackRequest, GenerateRequest
 from app.services.task_manager import task_manager
@@ -135,6 +136,18 @@ async def feedback_project(
 
     msg = AgentMessage(run_id=run.id, agent="user", role="user", content=payload.content)
     session.add(msg)
+    await session.commit()
+
+    # 同步写入聊天消息表，方便前端展示反馈内容
+    session.add(
+        Message(
+            project_id=project_id,
+            run_id=run.id,
+            agent="user",
+            role="user",
+            content=payload.content,
+        )
+    )
     await session.commit()
 
     async def _task() -> None:

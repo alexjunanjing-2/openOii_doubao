@@ -27,6 +27,10 @@ class FakeImageService:
         self.count += 1
         return self.url
 
+    async def cache_external_image(self, url: str) -> str:
+        # Tests use fake URLs; keep the URL unchanged.
+        return url
+
 
 class FakeVideoService:
     def __init__(self, url: str = "http://video.test/default.mp4", merged_url: str | None = None):
@@ -74,15 +78,13 @@ async def make_context(
     if video is None:
         video = FakeVideoService()
 
-    # Create context with all required parameters
-    ctx = AgentContext()
-    ctx.settings = settings
-    ctx.session = session
-    ctx.ws = ws
-    ctx.project = project
-    ctx.run = run
-    ctx.llm = llm
-    ctx.image = image
-    ctx.video = video
-
-    return ctx
+    return AgentContext(
+        settings=settings,
+        session=session,
+        ws=ws,
+        project=project,
+        run=run,
+        llm=llm,  # type: ignore[arg-type]
+        image=image,  # type: ignore[arg-type]
+        video=video,  # type: ignore[arg-type]
+    )

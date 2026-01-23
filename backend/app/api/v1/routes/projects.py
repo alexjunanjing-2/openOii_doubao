@@ -14,6 +14,7 @@ from app.schemas.project import (
     CharacterRead,
     MessageRead,
     ProjectCreate,
+    ProjectListRead,
     ProjectRead,
     ProjectUpdate,
     SceneRead,
@@ -30,10 +31,11 @@ def utcnow() -> datetime:
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 async def create_project(payload: ProjectCreate, session: AsyncSession = SessionDep):
+    style = (payload.style or "").strip() or "anime"
     project = Project(
         title=payload.title,
         story=payload.story,
-        style=payload.style,
+        style=style,
         status=payload.status or "draft",
     )
     session.add(project)
@@ -42,11 +44,11 @@ async def create_project(payload: ProjectCreate, session: AsyncSession = Session
     return ProjectRead.model_validate(project)
 
 
-@router.get("", response_model=list[ProjectRead])
+@router.get("", response_model=ProjectListRead)
 async def list_projects(session: AsyncSession = SessionDep):
     res = await session.execute(select(Project).order_by(Project.created_at.desc()))
     items = res.scalars().all()
-    return [ProjectRead.model_validate(p) for p in items]
+    return {"items": [ProjectRead.model_validate(p) for p in items], "total": len(items)}
 
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -58,12 +60,15 @@ async def get_project(project_id: int, session: AsyncSession = SessionDep):
 
 
 @router.put("/{project_id}", response_model=ProjectRead)
+@router.patch("/{project_id}", response_model=ProjectRead)
 async def update_project(project_id: int, payload: ProjectUpdate, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
+        if k == "style":
+            v = (v or "").strip() or "anime"
         setattr(project, k, v)
     project.updated_at = utcnow()
     session.add(project)
@@ -178,4 +183,3 @@ async def list_messages(project_id: int, session: AsyncSession = SessionDep):
         .order_by(Message.created_at.asc())
     )
     return [MessageRead.model_validate(m) for m in res.scalars().all()]
-

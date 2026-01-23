@@ -61,6 +61,7 @@ export function HoverActionBar({
                   action.onClick();
                 }}
                 disabled={action.loading}
+                aria-label={action.label}
               >
                 {!action.loading && <Icon className="w-4 h-4" />}
               </button>

@@ -48,9 +48,22 @@ class DummyClient:
 
 
 def test_get_client_missing_credentials(monkeypatch):
-    settings = Settings(database_url="sqlite+aiosqlite:///:memory:")
+    # 确保环境变量不干扰测试
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+
+    settings = Settings(
+        database_url="sqlite+aiosqlite:///:memory:",
+        anthropic_api_key=None,
+        anthropic_auth_token=None
+    )
     service = LLMService(settings)
-    monkeypatch.setattr(service, "_import_anthropic", lambda: SimpleNamespace(AsyncAnthropic=object))
+
+    class MockAsyncAnthropic:
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr(service, "_import_anthropic", lambda: SimpleNamespace(AsyncAnthropic=MockAsyncAnthropic))
 
     with pytest.raises(ValueError, match="Anthropic credentials missing"):
         service._get_client()

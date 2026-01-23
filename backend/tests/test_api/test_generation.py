@@ -13,6 +13,7 @@ from tests.factories import create_project, create_run
 def _immediate_task(coro):
     """Helper to make asyncio.create_task synchronous for testing"""
     loop = asyncio.get_running_loop()
+    coro.close()
     future = loop.create_future()
     future.set_result(None)
     return future

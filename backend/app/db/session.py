@@ -2,12 +2,31 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import update
+import asyncio
+from sqlalchemy import func, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from app.config import get_settings
 from app.models import agent_run, message, project  # noqa: F401
+
+
+def _patch_aiosqlite_event_loop() -> None:
+    # Python 3.14 tightened asyncio.get_event_loop() semantics; older aiosqlite versions
+    # may hang because they create futures on a non-running loop. Force it to use the
+    # running loop when available.
+    try:
+        import aiosqlite.core as _core  # type: ignore
+    except Exception:
+        return
+
+    try:
+        _core.asyncio.get_event_loop = asyncio.get_running_loop  # type: ignore[attr-defined]
+    except Exception:
+        return
+
+
+_patch_aiosqlite_event_loop()
 
 
 def _build_engine() -> AsyncEngine:
@@ -29,11 +48,19 @@ async def init_db() -> None:
     # 清理服务重启前遗留的 running/queued 状态的 run（它们已经不会继续执行了）
     async with async_session_maker() as session:
         from app.models.agent_run import AgentRun
+        from app.models.project import Project
 
         await session.execute(
             update(AgentRun)
             .where(AgentRun.status.in_(["queued", "running"]))
             .values(status="cancelled", error="Service restarted")
+        )
+
+        # 兼容旧数据：style 可能为 NULL/空字符串，统一回填为默认风格
+        await session.execute(
+            update(Project)
+            .where((Project.style.is_(None)) | (func.trim(Project.style) == ""))
+            .values(style="anime")
         )
         await session.commit()
 

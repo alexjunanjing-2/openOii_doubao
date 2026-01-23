@@ -3,13 +3,15 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from datetime import datetime, UTC
-from typing import TYPE_CHECKING
+from typing import Protocol
 
-if TYPE_CHECKING:
-    from typing import Any
+class CharacterLike(Protocol):
+    name: str
+    description: str | None
 
-def build_character_context(characters: list[Any]) -> str:
+def build_character_context(characters: Sequence[CharacterLike]) -> str:
     """构建角色上下文描述（用于 prompt 拼接）
 
     Args:

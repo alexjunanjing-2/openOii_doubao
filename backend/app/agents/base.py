@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,9 @@ from app.services.image import ImageService
 from app.services.llm import LLMResponse, LLMService
 from app.services.video_factory import VideoServiceProtocol
 from app.ws.manager import ConnectionManager
+
+if TYPE_CHECKING:
+    from app.models.project import Character
 
 
 @dataclass
@@ -144,6 +148,7 @@ class BaseAgent:
         ctx: AgentContext,
         prompt: str,
         image_bytes: bytes | None = None,
+        timeout_s: float | None = None,
         **kwargs: Any,
     ) -> str:
         """生成图片并缓存到本地
@@ -152,19 +157,27 @@ class BaseAgent:
             ctx: Agent 上下文
             prompt: 图片生成 prompt
             image_bytes: 可选的参考图片字节流（用于 I2I）
+            timeout_s: 仅对 generate_url 阶段生效的超时（秒）；缓存/下载不受此超时影响
             **kwargs: 传递给 generate_url 的额外参数
 
         Returns:
             缓存后的图片 URL
         """
-        url = await ctx.image.generate_url(
+        generate_url_coro = ctx.image.generate_url(
             prompt=prompt,
             image_bytes=image_bytes,
-            **kwargs
+            **kwargs,
         )
+        if timeout_s is not None:
+            try:
+                url = await asyncio.wait_for(generate_url_coro, timeout=timeout_s)
+            except asyncio.TimeoutError as exc:
+                raise RuntimeError(f"图片生成超时（超过{timeout_s:.0f}秒）") from exc
+        else:
+            url = await generate_url_coro
         return await ctx.image.cache_external_image(url)
 
-    async def get_project_characters(self, ctx: AgentContext) -> list[Any]:
+    async def get_project_characters(self, ctx: AgentContext) -> list["Character"]:
         """获取项目的所有角色
 
         Args:
@@ -196,7 +209,11 @@ class BaseAgent:
             current: 当前索引（从 0 开始）
             message: 进度消息
         """
-        progress = current / total if total > 0 else 0.0
+        progress = (current + 1) / total if total > 0 else 0.0
+        if progress < 0.0:
+            progress = 0.0
+        if progress > 1.0:
+            progress = 1.0
         await self.send_message(ctx, message, progress=progress, is_loading=True)
 
     async def call_llm(

@@ -141,6 +141,7 @@ async def _run_agent_plan(
 
 
 @router.put("/{shot_id}", response_model=ShotRead)
+@router.patch("/{shot_id}", response_model=ShotRead)
 async def update_shot(
     shot_id: int,
     payload: ShotUpdate,
@@ -173,11 +174,14 @@ async def update_shot(
 @router.post("/{shot_id}/regenerate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED)
 async def regenerate_shot(
     shot_id: int,
-    payload: RegenerateRequest,
+    payload: RegenerateRequest | None = None,
     session: AsyncSession = SessionDep,
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
+    if payload is None:
+        payload = RegenerateRequest(type="video")
+
     shot = await session.get(Shot, shot_id)
     if not shot:
         raise HTTPException(status_code=404, detail="Shot not found")

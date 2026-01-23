@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import SessionDep, WsManagerDep
 from app.models.project import Project, Scene, Shot
-from app.schemas.project import SceneRead, SceneUpdate
+from app.schemas.project import SceneRead, SceneUpdate, ShotRead
 from app.services.file_cleaner import delete_file, delete_files
 from app.ws.manager import ConnectionManager
 
@@ -25,6 +25,7 @@ def _scene_payload(scene: Scene) -> dict[str, Any]:
 
 
 @router.put("/{scene_id}", response_model=SceneRead)
+@router.patch("/{scene_id}", response_model=SceneRead)
 async def update_scene(
     scene_id: int,
     payload: SceneUpdate,
@@ -48,6 +49,15 @@ async def update_scene(
         {"type": "scene_updated", "data": {"scene": _scene_payload(scene)}},
     )
     return SceneRead.model_validate(scene)
+
+
+@router.get("/{scene_id}/shots", response_model=list[ShotRead])
+async def list_scene_shots(scene_id: int, session: AsyncSession = SessionDep):
+    res = await session.execute(
+        select(Shot).where(Shot.scene_id == scene_id).order_by(Shot.order.asc())
+    )
+    items = res.scalars().all()
+    return [ShotRead.model_validate(s) for s in items]
 
 
 @router.delete("/{scene_id}", status_code=status.HTTP_204_NO_CONTENT)

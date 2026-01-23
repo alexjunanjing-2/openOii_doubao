@@ -8,7 +8,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # Note: do not hardcode env_file here; tests instantiate Settings() directly and
+    # should not implicitly read the repo's .env. Runtime uses get_settings().
+    model_config = SettingsConfigDict(extra="ignore")
 
     app_name: str = "openOii-backend"
     environment: str = Field(default="dev", description="dev|staging|prod")
@@ -183,4 +185,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    return Settings(_env_file=".env", _env_file_encoding="utf-8")

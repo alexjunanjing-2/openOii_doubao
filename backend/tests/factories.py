@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.agent_run import AgentRun
+from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
 from app.models.project import Character, Project, Scene, Shot
 
@@ -64,21 +64,16 @@ async def create_message(
     return message
 
 
-# Alias for backward compatibility with tests
 async def create_agent_message(
     session: AsyncSession,
     run_id: int,
-    project_id: int = 1,
     content: str = "Test feedback",
-) -> Message:
-    return await create_message(
-        session=session,
-        run_id=run_id,
-        project_id=project_id,
-        agent="user",
-        role="user",
-        content=content,
-    )
+) -> AgentMessage:
+    msg = AgentMessage(run_id=run_id, agent="user", role="user", content=content)
+    session.add(msg)
+    await session.commit()
+    await session.refresh(msg)
+    return msg
 
 
 async def create_character(

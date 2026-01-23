@@ -20,25 +20,35 @@ describe('Card', () => {
   });
 
   it('applies custom className', () => {
-    render(<Card className="my-custom-class">Content</Card>);
-    expect(screen.getByText('Content').parentElement).toHaveClass('my-custom-class');
+    const { container } = render(<Card className="my-custom-class">Content</Card>);
+    const card = container.firstChild as HTMLElement;
+    expect(card).toHaveClass('my-custom-class');
+    expect(card).toHaveClass('card-doodle');
   });
 
   it('applies custom style', () => {
-    render(<Card style={{ color: 'red' }}>Content</Card>);
-    expect(screen.getByText('Content').parentElement).toHaveStyle({ color: 'red' });
+    const { container } = render(<Card style={{ color: 'red', backgroundColor: 'blue' }}>Content</Card>);
+    const card = container.firstChild as HTMLElement;
+    // 验证 style 属性已应用（不检查具体值，因为 DaisyUI 基础样式可能覆盖）
+    expect(card.style.color).toBe('red');
+    expect(card.style.backgroundColor).toBe('blue');
   });
 
   it('applies variant styles', () => {
-    const { rerender } = render(<Card variant="primary">Primary</Card>);
-    expect(screen.getByText('Primary').parentElement).toHaveClass('bg-primary/10');
+    const { container, rerender } = render(<Card variant="primary">Primary</Card>);
+    let card = container.firstChild as HTMLElement;
+    expect(card).toHaveClass('bg-primary/10');
+    expect(card).toHaveClass('border-primary');
 
     rerender(<Card variant="secondary">Secondary</Card>);
-    expect(screen.getByText('Secondary').parentElement).toHaveClass('bg-secondary/10');
+    card = container.firstChild as HTMLElement;
+    expect(card).toHaveClass('bg-secondary/10');
+    expect(card).toHaveClass('border-secondary');
   });
 
   it('uses default variant when none is provided', () => {
-    render(<Card>Default</Card>);
-    expect(screen.getByText('Default').parentElement).toHaveClass('bg-base-100');
+    const { container } = render(<Card>Default</Card>);
+    const card = container.firstChild as HTMLElement;
+    expect(card).toHaveClass('bg-base-100');
   });
 });

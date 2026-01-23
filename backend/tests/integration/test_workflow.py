@@ -37,6 +37,9 @@ class StubImage:
         self.count += 1
         return f"http://image.test/{self.count}"
 
+    async def cache_external_image(self, url: str) -> str:
+        return url
+
 
 class StubVideo:
     def __init__(self, settings):

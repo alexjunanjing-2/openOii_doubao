@@ -12,10 +12,10 @@ class CharacterArtistAgent(BaseAgent):
 
     async def _generate_character_image(self, ctx: AgentContext, character: Character) -> None:
         # 生成图片 URL
-        image_prompt = self._build_image_prompt(character)
+        image_prompt = self._build_image_prompt(character, style=ctx.project.style)
         external_url = await self.generate_and_cache_image(ctx, prompt=image_prompt)
 
-        # 直接保存外部 URL（不下载）
+        # 保存图片 URL（优先为本地缓存 URL；缓存失败时可能仍为外部 URL）
         character.image_url = external_url
         ctx.session.add(character)
         await ctx.session.flush()
@@ -23,10 +23,11 @@ class CharacterArtistAgent(BaseAgent):
         # 发送角色更新事件
         await self.send_character_event(ctx, character, "character_updated")
 
-    def _build_image_prompt(self, character: Character) -> str:
+    def _build_image_prompt(self, character: Character, *, style: str) -> str:
         """根据角色描述构建图片生成 prompt"""
-        # 完全信任 Agent 生成的描述，不追加硬编码风格
-        return character.description or character.name
+        desc = character.description or character.name
+        style = style.strip()
+        return f"{desc}, Style: {style}" if style else desc
 
     async def run_for_character(self, ctx: AgentContext, character: Character) -> None:
         await self.send_message(
@@ -72,13 +73,11 @@ class CharacterArtistAgent(BaseAgent):
         updated_count = 0
         for i, char in enumerate(characters):
             try:
-                # 计算进度并发送更新消息
-                current_progress = i / total
-                await self.send_message(
+                await self.send_progress_batch(
                     ctx,
-                    f"   正在绘制：{char.name} ({i+1}/{total})",
-                    progress=current_progress,
-                    is_loading=True,
+                    total=total,
+                    current=i,
+                    message=f"   正在绘制：{char.name} ({i+1}/{total})",
                 )
 
                 await self._generate_character_image(ctx, char)

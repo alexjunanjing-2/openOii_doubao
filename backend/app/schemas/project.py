@@ -34,6 +34,11 @@ class ProjectRead(BaseModel):
     updated_at: datetime
 
 
+class ProjectListRead(BaseModel):
+    items: list[ProjectRead]
+    total: int
+
+
 class CharacterRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,4 +128,3 @@ class MessageRead(BaseModel):
     progress: float | None
     is_loading: bool
     created_at: datetime
-

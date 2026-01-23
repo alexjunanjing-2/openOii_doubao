@@ -10,7 +10,7 @@ from app.db.session import get_session
 from app.ws.manager import ConnectionManager, ws_manager
 
 
-def get_app_settings() -> Settings:
+async def get_app_settings() -> Settings:
     return get_settings()
 
 
@@ -19,11 +19,10 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-def get_ws_manager() -> ConnectionManager:
+async def get_ws_manager() -> ConnectionManager:
     return ws_manager
 
 
 SettingsDep = Depends(get_app_settings)
 SessionDep = Depends(get_db_session)
 WsManagerDep = Depends(get_ws_manager)
-
