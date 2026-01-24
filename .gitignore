@@ -18,3 +18,5 @@ static
 *.timestamp_*
 playwright-report/
 test-results/
+CLAUDE.md
+.openspec

@@ -446,7 +446,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
                       <PreviewableImage
                         src={charImageUrl}
                         alt={char.name}
-                        className="w-full h-32 object-cover rounded-lg mb-2"
+                        className="w-full max-h-64 object-contain rounded-lg mb-2"
                         onPreview={handleImagePreview}
                       />
                     ) : (
@@ -456,7 +456,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
                     )}
                     <h4 className="font-bold text-sm">{char.name}</h4>
                     {char.description && (
-                      <p className="text-xs text-base-content/70 mt-1 line-clamp-2">
+                      <p className="text-xs text-base-content/70 mt-1">
                         {char.description}
                       </p>
                     )}
@@ -539,7 +539,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
                                     )}
                                     <div className="mt-1">
                                       <span className="text-xs font-bold">#{shot.order}</span>
-                                      <p className="text-xs text-base-content/70 line-clamp-2">
+                                      <p className="text-xs text-base-content/70">
                                         {shot.description}
                                       </p>
                                     </div>

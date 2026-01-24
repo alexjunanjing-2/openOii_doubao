@@ -6,7 +6,6 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   FaceFrownIcon,
-  PaintBrushIcon,
   PencilIcon,
   StopIcon,
 } from "@heroicons/react/24/outline";
@@ -346,19 +345,8 @@ export function ProjectPage() {
           />
         </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden card-doodle !rounded-xl">
-          <div className="flex items-center justify-between px-4 py-2 border-b-3 border-base-content/30">
-            <div className="flex items-center gap-2">
-              <span className="font-heading font-semibold inline-flex items-center gap-2">
-                <PaintBrushIcon className="w-5 h-5" aria-hidden="true" />
-                预览画布
-              </span>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-hidden bg-base-200/50">
-            <StageView projectId={projectId} />
-          </div>
+        <div className="flex-1 overflow-hidden">
+          <StageView projectId={projectId} />
         </div>
       </main>
     </div>
