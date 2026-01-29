@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.utils import build_character_context
-from app.models.project import Character, Scene, Shot
+from app.models.project import Character, Shot
 from app.services.image_composer import ImageComposer
 
 logger = logging.getLogger(__name__)
@@ -70,12 +70,11 @@ class StoryboardArtistAgent(BaseAgent):
         # 查找没有首帧图片的 Shot（可按目标分镜过滤）
         query = (
             select(Shot)
-            .join(Scene, Shot.scene_id == Scene.id)
             .where(
-                Scene.project_id == ctx.project.id,
+                Shot.project_id == ctx.project.id,
                 Shot.image_url.is_(None),
             )
-            .order_by(Scene.order, Shot.order)
+            .order_by(Shot.order)
         )
         if ctx.target_ids and ctx.target_ids.shot_ids:
             query = query.where(Shot.id.in_(ctx.target_ids.shot_ids))

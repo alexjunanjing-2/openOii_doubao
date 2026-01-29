@@ -49,20 +49,11 @@ class CharacterRead(BaseModel):
     image_url: str | None
 
 
-class SceneRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: int
-    project_id: int
-    order: int
-    description: str
-
-
 class ShotRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    scene_id: int
+    project_id: int
     order: int
     description: str
     prompt: str | None
@@ -81,11 +72,6 @@ class ShotUpdate(BaseModel):
 
 class CharacterUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1)
-    description: str | None = None
-
-
-class SceneUpdate(BaseModel):
-    order: int | None = Field(default=None, ge=1)
     description: str | None = None
 
 

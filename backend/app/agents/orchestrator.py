@@ -18,7 +18,7 @@ from app.agents.video_merger import VideoMergerAgent
 from app.agents.review import ReviewAgent
 from app.config import Settings
 from app.models.agent_run import AgentMessage, AgentRun
-from app.models.project import Character, Project, Scene, Shot
+from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
@@ -53,7 +53,7 @@ AGENT_COMPLETION_INFO = {
     },
     "scriptwriter": {
         "completed": "已完成剧本创作",
-        "details": "生成了角色设定、场景描述和分镜脚本",
+        "details": "生成了角色设定和分镜脚本",
         "next": "接下来将为角色生成参考图片",
         "question": "剧本内容和角色设定是否满意？如果需要修改，请告诉我具体的调整意见。",
     },
@@ -167,7 +167,7 @@ class GenerationOrchestrator:
         self.agents = [
             OnboardingAgent(),
             DirectorAgent(),
-            ScriptwriterAgent(),  # 生成角色+场景+分镜描述
+            ScriptwriterAgent(),  # 生成角色+分镜描述
             CharacterArtistAgent(),  # 生成角色图片
             StoryboardArtistAgent(),  # 生成分镜首帧图片
             VideoGeneratorAgent(),  # 生成分镜视频
@@ -182,11 +182,7 @@ class GenerationOrchestrator:
         raise ValueError(f"Unknown agent: {agent_name}")
 
     async def _delete_project_shots(self, project_id: int) -> None:
-        scene_ids_subq = select(Scene.id).where(Scene.project_id == project_id)
-        await self.session.execute(delete(Shot).where(Shot.scene_id.in_(scene_ids_subq)))
-
-    async def _delete_project_scenes(self, project_id: int) -> None:
-        await self.session.execute(delete(Scene).where(Scene.project_id == project_id))
+        await self.session.execute(delete(Shot).where(Shot.project_id == project_id))
 
     async def _delete_project_characters(self, project_id: int) -> None:
         await self.session.execute(delete(Character).where(Character.project_id == project_id))
@@ -206,8 +202,7 @@ class GenerationOrchestrator:
 
     async def _clear_shot_images(self, project_id: int) -> None:
         """清空分镜首帧图片（先删除文件再清空 URL）"""
-        scene_ids_subq = select(Scene.id).where(Scene.project_id == project_id)
-        res = await self.session.execute(select(Shot).where(Shot.scene_id.in_(scene_ids_subq)))
+        res = await self.session.execute(select(Shot).where(Shot.project_id == project_id))
         shots = res.scalars().all()
         # 先删除文件
         delete_files([shot.image_url for shot in shots])
@@ -218,8 +213,7 @@ class GenerationOrchestrator:
 
     async def _clear_shot_videos(self, project_id: int) -> None:
         """清空分镜视频（先删除文件再清空 URL）"""
-        scene_ids_subq = select(Scene.id).where(Scene.project_id == project_id)
-        res = await self.session.execute(select(Shot).where(Shot.scene_id.in_(scene_ids_subq)))
+        res = await self.session.execute(select(Shot).where(Shot.project_id == project_id))
         shots = res.scalars().all()
         # 先删除文件
         delete_files([shot.video_url for shot in shots])
@@ -277,13 +271,11 @@ class GenerationOrchestrator:
         else:
             # 全量模式：原有逻辑
             if start_agent in {"onboarding", "director", "scriptwriter"}:
-                # 从头开始：删除角色、场景、镜头
-                # 注意：必须先删除 Shot（依赖 Scene），再删除 Scene
+                # 从头开始：删除角色、镜头
                 await self._delete_project_shots(project_id)
-                await self._delete_project_scenes(project_id)
                 await self._delete_project_characters(project_id)
                 await self._clear_project_video(project_id)
-                cleared_types = ["characters", "scenes", "shots"]
+                cleared_types = ["characters", "shots"]
             elif start_agent == "character_artist":
                 # 重新生成角色图片，并清空下游产物
                 await self._clear_character_images(project_id)

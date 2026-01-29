@@ -154,3 +154,64 @@
     animation: none;
   }
 }
+
+/* ========== tldraw 无限画布样式覆盖 ========== */
+
+/* 画布容器 */
+.infinite-canvas-container {
+  @apply w-full h-full;
+}
+
+.infinite-canvas-container .tl-container {
+  --tl-font-family: 'Nunito', 'Comic Neue', sans-serif;
+  background: transparent !important;
+}
+
+/* tldraw 背景层 - 使用主题色 */
+.infinite-canvas-container .tl-background {
+  background: oklch(var(--b1)) !important;
+}
+
+/* 隐藏 tldraw 默认 UI */
+.infinite-canvas-container .tlui-layout__top,
+.infinite-canvas-container .tlui-layout__bottom,
+.infinite-canvas-container .tlui-navigation-panel,
+.infinite-canvas-container .tlui-help-menu,
+.infinite-canvas-container .tlui-debug-panel,
+.infinite-canvas-container .tlui-menu-panel,
+.infinite-canvas-container .tlui-style-panel {
+  display: none !important;
+}
+
+/* 隐藏 tldraw 水印 */
+.infinite-canvas-container .tlui-watermark,
+.infinite-canvas-container [class*="watermark"],
+.infinite-canvas-container .tl-watermark,
+.infinite-canvas-container .tlui-watermark__inner {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* Shape 容器样式 */
+.infinite-canvas-container .tl-shape-container {
+  /* 确保 Tailwind 类在 Shape 内生效 */
+}
+
+/* 选中状态指示器 */
+.infinite-canvas-container .tl-selection__fg {
+  stroke: oklch(var(--p));
+  stroke-width: 2px;
+}
+
+/* 禁用 tldraw 内部的 hover 效果，使用自定义的 card-doodle hover */
+.infinite-canvas-container .tl-shape:hover {
+  /* 不添加额外效果 */
+}
+
+/* 确保 Modal 在 tldraw 之上 */
+.infinite-canvas-container ~ [class*="modal"],
+.infinite-canvas-container ~ [class*="fixed"] {
+  z-index: 9999 !important;
+}

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.scriptwriter import SYSTEM_PROMPT
 from app.agents.utils import extract_json, utcnow
-from app.models.project import Character, Scene, Shot
+from app.models.project import Character, Shot
 
 
 def _character_to_description(item: dict) -> str:
@@ -92,9 +92,9 @@ class ScriptwriterAgent(BaseAgent):
     name = "scriptwriter"
 
     async def _get_existing_state(self, ctx: AgentContext) -> dict[str, Any]:
-        """获取现有的角色、场景、分镜状态"""
+        """获取现有的角色、分镜状态"""
         from sqlalchemy import select
-        from app.models.project import Character, Scene, Shot
+        from app.models.project import Character, Shot
 
         # 获取现有角色
         char_res = await ctx.session.execute(
@@ -105,39 +105,27 @@ class ScriptwriterAgent(BaseAgent):
             for c in char_res.scalars().all()
         ]
 
-        # 获取现有场景和分镜
-        scene_res = await ctx.session.execute(
-            select(Scene).where(Scene.project_id == ctx.project.id).order_by(Scene.order)
+        # 获取现有分镜
+        shot_res = await ctx.session.execute(
+            select(Shot).where(Shot.project_id == ctx.project.id).order_by(Shot.order)
         )
-        scenes = []
-        for scene in scene_res.scalars().all():
-            shot_res = await ctx.session.execute(
-                select(Shot).where(Shot.scene_id == scene.id).order_by(Shot.order)
-            )
-            shots = [
-                {
-                    "id": s.id,
-                    "order": s.order,
-                    "description": s.description,
-                    "prompt": s.prompt,
-                    "image_prompt": s.image_prompt,
-                }
-                for s in shot_res.scalars().all()
-            ]
-            scenes.append({
-                "id": scene.id,
-                "order": scene.order,
-                "description": scene.description,
-                "shots": shots,
-            })
+        shots = [
+            {
+                "id": s.id,
+                "order": s.order,
+                "description": s.description,
+                "prompt": s.prompt,
+                "image_prompt": s.image_prompt,
+            }
+            for s in shot_res.scalars().all()
+        ]
 
-        return {"characters": characters, "scenes": scenes}
+        return {"characters": characters, "shots": shots}
 
     async def _apply_incremental_changes(self, ctx: AgentContext, data: dict) -> tuple[int, int, int]:
         """应用增量更新，返回 (新建角色数, 新建场景数, 新建分镜数)"""
         preserve_ids = data.get("preserve_ids") or {}
         preserve_char_ids = set(preserve_ids.get("characters") or [])
-        preserve_scene_ids = set(preserve_ids.get("scenes") or [])
         preserve_shot_ids = set(preserve_ids.get("shots") or [])
 
         # 删除不在 preserve_ids 中的项目
@@ -151,31 +139,14 @@ class ScriptwriterAgent(BaseAgent):
                 deleted_char_ids.append(char.id)
                 await ctx.session.delete(char)
 
-        scene_res = await ctx.session.execute(
-            select(Scene).where(Scene.project_id == ctx.project.id)
-        )
-        deleted_scene_ids = []
         deleted_shot_ids = []
-        for scene in scene_res.scalars().all():
-            if scene.id not in preserve_scene_ids:
-                # 先删除该场景的所有分镜
-                shot_res = await ctx.session.execute(
-                    select(Shot).where(Shot.scene_id == scene.id)
-                )
-                for shot in shot_res.scalars().all():
-                    deleted_shot_ids.append(shot.id)
-                    await ctx.session.delete(shot)
-                deleted_scene_ids.append(scene.id)
-                await ctx.session.delete(scene)
-            else:
-                # 场景保留，但检查分镜
-                shot_res = await ctx.session.execute(
-                    select(Shot).where(Shot.scene_id == scene.id)
-                )
-                for shot in shot_res.scalars().all():
-                    if shot.id not in preserve_shot_ids:
-                        deleted_shot_ids.append(shot.id)
-                        await ctx.session.delete(shot)
+        shot_res = await ctx.session.execute(
+            select(Shot).where(Shot.project_id == ctx.project.id)
+        )
+        for shot in shot_res.scalars().all():
+            if shot.id not in preserve_shot_ids:
+                deleted_shot_ids.append(shot.id)
+                await ctx.session.delete(shot)
 
         await ctx.session.flush()
 
@@ -184,11 +155,6 @@ class ScriptwriterAgent(BaseAgent):
             await ctx.ws.send_event(
                 ctx.project.id,
                 {"type": "character_deleted", "data": {"character_id": char_id}},
-            )
-        for scene_id in deleted_scene_ids:
-            await ctx.ws.send_event(
-                ctx.project.id,
-                {"type": "scene_deleted", "data": {"scene_id": scene_id}},
             )
         for shot_id in deleted_shot_ids:
             await ctx.ws.send_event(
@@ -217,79 +183,51 @@ class ScriptwriterAgent(BaseAgent):
                     )
                     ctx.session.add(new_char)
                     new_char_count += 1
+                else:
+                    existing_char = await ctx.session.get(Character, char_id)
+                    if existing_char and existing_char.project_id == ctx.project.id:
+                        existing_char.name = name.strip()
+                        existing_char.description = _character_to_description(item)
+                        ctx.session.add(existing_char)
 
         await ctx.session.flush()
 
-        # 处理新增/更新的场景和分镜
+        # 处理新增/更新的分镜
         new_scene_count = 0
         new_shot_count = 0
-        raw_scenes = data.get("scenes") or []
-        if isinstance(raw_scenes, list):
-            for scene_data in raw_scenes:
-                if not isinstance(scene_data, dict):
+        raw_shots = data.get("shots") or []
+        if isinstance(raw_shots, list):
+            for idx, shot_data in enumerate(raw_shots):
+                if not isinstance(shot_data, dict):
                     continue
-                scene_id = scene_data.get("id")
-                if scene_id is None:
-                    # 新建场景
-                    order = scene_data.get("order") or 1
-                    new_scene = Scene(
-                        project_id=ctx.project.id,
-                        order=order,
-                        description=_scene_to_description(scene_data),
-                    )
-                    ctx.session.add(new_scene)
-                    await ctx.session.flush()
-                    new_scene_count += 1
+                shot_id = shot_data.get("id")
+                shot_desc = shot_data.get("description")
+                if not (isinstance(shot_desc, str) and shot_desc.strip()):
+                    continue
+                shot_order = shot_data.get("order") if isinstance(shot_data.get("order"), int) else idx + 1
+                video_prompt = shot_data.get("video_prompt") or shot_data.get("prompt") or shot_desc
+                image_prompt = shot_data.get("image_prompt") or shot_desc
 
-                    # 创建该场景的分镜
-                    shot_plan = scene_data.get("shot_plan") or []
-                    for idx, shot_data in enumerate(shot_plan):
-                        if not isinstance(shot_data, dict):
-                            continue
-                        shot_desc = shot_data.get("description")
-                        if not (isinstance(shot_desc, str) and shot_desc.strip()):
-                            continue
-                        shot_order = shot_data.get("order") if isinstance(shot_data.get("order"), int) else idx + 1
-                        video_prompt = shot_data.get("video_prompt") or shot_data.get("prompt") or shot_desc
-                        image_prompt = shot_data.get("image_prompt") or shot_desc
-                        new_shot = Shot(
-                            scene_id=new_scene.id,
-                            order=shot_order,
-                            description=shot_desc.strip(),
-                            prompt=video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip(),
-                            image_prompt=image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip(),
-                            video_url=None,
-                            image_url=None,
-                        )
-                        ctx.session.add(new_shot)
-                        new_shot_count += 1
+                if shot_id is None:
+                    new_shot = Shot(
+                        project_id=ctx.project.id,
+                        order=shot_order,
+                        description=shot_desc.strip(),
+                        prompt=video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip(),
+                        image_prompt=image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip(),
+                        video_url=None,
+                        image_url=None,
+                    )
+                    ctx.session.add(new_shot)
+                    new_shot_count += 1
                 else:
-                    # 保留的场景：检查是否有新的 shot_plan 需要创建
-                    shot_plan = scene_data.get("shot_plan") or []
-                    for idx, shot_data in enumerate(shot_plan):
-                        if not isinstance(shot_data, dict):
-                            continue
-                        shot_id = shot_data.get("id")
-                        # 只创建新的分镜（id 为 None 的）
-                        if shot_id is not None:
-                            continue
-                        shot_desc = shot_data.get("description")
-                        if not (isinstance(shot_desc, str) and shot_desc.strip()):
-                            continue
-                        shot_order = shot_data.get("order") if isinstance(shot_data.get("order"), int) else idx + 1
-                        video_prompt = shot_data.get("video_prompt") or shot_data.get("prompt") or shot_desc
-                        image_prompt = shot_data.get("image_prompt") or shot_desc
-                        new_shot = Shot(
-                            scene_id=scene_id,
-                            order=shot_order,
-                            description=shot_desc.strip(),
-                            prompt=video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip(),
-                            image_prompt=image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip(),
-                            video_url=None,
-                            image_url=None,
-                        )
-                        ctx.session.add(new_shot)
-                        new_shot_count += 1
+                    existing_shot = await ctx.session.get(Shot, shot_id)
+                    if existing_shot and existing_shot.project_id == ctx.project.id:
+                        existing_shot.order = shot_order
+                        existing_shot.description = shot_desc.strip()
+                        existing_shot.prompt = video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip()
+                        existing_shot.image_prompt = image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip()
+                        ctx.session.add(existing_shot)
 
         await ctx.session.flush()
         return new_char_count, new_scene_count, new_shot_count
@@ -339,28 +277,23 @@ class ScriptwriterAgent(BaseAgent):
 
         # 增量模式：使用增量更新逻辑
         if is_incremental:
-            new_char_count, new_scene_count, new_shot_count = await self._apply_incremental_changes(ctx, data)
+            new_char_count, _, new_shot_count = await self._apply_incremental_changes(ctx, data)
 
             # 重新查询最终状态
             char_res = await ctx.session.execute(
                 select(Character).where(Character.project_id == ctx.project.id)
             )
             final_chars = list(char_res.scalars().all())
-            scene_res = await ctx.session.execute(
-                select(Scene).where(Scene.project_id == ctx.project.id)
+            shot_res = await ctx.session.execute(
+                select(Shot).where(Shot.project_id == ctx.project.id).order_by(Shot.order.asc())
             )
-            final_scenes = list(scene_res.scalars().all())
+            final_shots = list(shot_res.scalars().all())
 
             # 发送事件
             for char in final_chars:
                 await self.send_character_event(ctx, char, "character_updated")
-            for scene in final_scenes:
-                await self.send_scene_event(ctx, scene, "scene_updated")
-                shot_res = await ctx.session.execute(
-                    select(Shot).where(Shot.scene_id == scene.id)
-                )
-                for shot in shot_res.scalars().all():
-                    await self.send_shot_event(ctx, shot, "shot_updated")
+            for shot in final_shots:
+                await self.send_shot_event(ctx, shot, "shot_updated")
 
             await ctx.session.commit()
 
@@ -368,14 +301,10 @@ class ScriptwriterAgent(BaseAgent):
             char_names = [c.name for c in final_chars]
             await self.send_message(ctx, f"👥 角色设定：{', '.join(char_names)}")
 
-            # 统计分镜数量
-            shot_count_res = await ctx.session.execute(
-                select(Shot).join(Scene).where(Scene.project_id == ctx.project.id)
-            )
-            total_shots = len(list(shot_count_res.scalars().all()))
+            total_shots = len(final_shots)
             await self.send_message(
                 ctx,
-                f"✅ 增量更新完成：{len(final_chars)} 个角色、{len(final_scenes)} 个场景、{total_shots} 个分镜，接下来将进行角色设计。",
+                f"✅ 增量更新完成：{len(final_chars)} 个角色、{total_shots} 个分镜，接下来将进行角色设计。",
                 progress=1.0
             )
             return
@@ -409,94 +338,48 @@ class ScriptwriterAgent(BaseAgent):
                     await self.send_character_event(ctx, character, "character_created")
                 await self.send_message(ctx, f"👥 角色设定：{', '.join(char_names)}")
 
-        # 创建场景
-        raw_scenes = data.get("scenes") or []
-        if not isinstance(raw_scenes, list) or not raw_scenes:
-            raise ValueError("LLM 响应未返回任何场景")
+        # 创建镜头（不含图片和视频）
+        raw_shots = data.get("shots") or []
+        if not isinstance(raw_shots, list) or not raw_shots:
+            raise ValueError("LLM 响应未返回任何分镜")
 
-        new_scenes: list[Scene] = []
-        scene_shot_map: dict[int, list[dict]] = {}  # scene.order -> shots
+        new_shots: list[Shot] = []
         fallback_order = 1
-        for scene in raw_scenes:
-            if not isinstance(scene, dict):
+        for idx, shot_data in enumerate(raw_shots):
+            if not isinstance(shot_data, dict):
                 continue
-            order = scene.get("order")
+            shot_desc = shot_data.get("description")
+            if not (isinstance(shot_desc, str) and shot_desc.strip()):
+                continue
+            order = shot_data.get("order")
             if isinstance(order, int) and order > 0:
-                scene_order = order
+                shot_order = order
             else:
-                scene_order = fallback_order
-            fallback_order = max(fallback_order, scene_order + 1)
-            new_scenes.append(
-                Scene(
+                shot_order = fallback_order
+            fallback_order = max(fallback_order, shot_order + 1)
+
+            video_prompt = shot_data.get("video_prompt") or shot_data.get("prompt") or shot_desc
+            image_prompt = shot_data.get("image_prompt") or shot_desc
+
+            new_shots.append(
+                Shot(
                     project_id=ctx.project.id,
-                    order=scene_order,
-                    description=_scene_to_description(scene),
+                    order=shot_order,
+                    description=shot_desc.strip(),
+                    prompt=video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip(),
+                    image_prompt=image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip(),
+                    video_url=None,  # 视频由 VideoGenerator 生成
+                    image_url=None,  # 图片由 StoryboardArtist 生成
                 )
             )
-            # 收集 shot_plan，稍后创建 Shot
-            shot_plan = scene.get("shot_plan")
-            if isinstance(shot_plan, list):
-                scene_shot_map[scene_order] = shot_plan
 
-        if not new_scenes:
-            raise ValueError("LLM 响应的场景列表为空或无效")
+        if not new_shots:
+            raise ValueError("LLM 响应的分镜列表为空或无效")
 
-        new_scenes.sort(key=lambda s: s.order)
-        ctx.session.add_all(new_scenes)
+        new_shots.sort(key=lambda s: s.order)
+        ctx.session.add_all(new_shots)
         await ctx.session.flush()  # 获取分配的 ID
-
-        # 发送场景创建事件
-        for scene in new_scenes:
-            await self.send_scene_event(ctx, scene, "scene_created")
-
-        # 显示场景概要 - 显示全部场景
-        scene_titles = []
-        for scene in raw_scenes:
-            if isinstance(scene, dict):
-                title = scene.get("title") or scene.get("description", "")[:20]
-                if title:
-                    scene_titles.append(title if len(title) <= 20 else title[:20] + "...")
-        scene_msg = f"🎬 场景列表：共 {len(new_scenes)} 个场景"
-        if scene_titles:
-            scene_msg += f"\n   " + " → ".join(scene_titles)
-        await self.send_message(ctx, scene_msg)
-
-        # 创建镜头（不含图片和视频）
-        new_shots: list[Shot] = []
-        for scene in new_scenes:
-            shots = scene_shot_map.get(scene.order, [])
-            for idx, shot in enumerate(shots):
-                if not isinstance(shot, dict):
-                    continue
-                shot_desc = shot.get("description")
-                if not (isinstance(shot_desc, str) and shot_desc.strip()):
-                    continue
-                # shot.order 如果没有则用索引+1
-                shot_order = shot.get("order") if isinstance(shot.get("order"), int) else idx + 1
-                # video_prompt 用于视频生成，image_prompt 用于首帧图片
-                video_prompt = shot.get("video_prompt") or shot.get("prompt") or shot_desc
-                image_prompt = shot.get("image_prompt") or shot_desc
-
-                new_shots.append(
-                    Shot(
-                        scene_id=scene.id,
-                        order=shot_order,
-                        description=shot_desc.strip(),
-                        prompt=video_prompt.strip() if isinstance(video_prompt, str) else shot_desc.strip(),
-                        image_prompt=image_prompt.strip() if isinstance(image_prompt, str) else shot_desc.strip(),
-                        video_url=None,  # 视频由 VideoGenerator 生成
-                        image_url=None,  # 图片由 StoryboardArtist 生成
-                    )
-                )
-
-        if new_shots:
-            ctx.session.add_all(new_shots)
-            await ctx.session.flush()  # 获取分配的 ID
-            # 发送分镜创建事件
-            for shot in new_shots:
-                await self.send_shot_event(ctx, shot, "shot_created")
-            await ctx.session.commit()
-            await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_scenes)} 个场景、{len(new_shots)} 个镜头，接下来将进行角色设计。", progress=1.0)
-        else:
-            await ctx.session.commit()
-            await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_scenes)} 个场景，接下来将进行角色设计。", progress=1.0)
+        for shot in new_shots:
+            await self.send_shot_event(ctx, shot, "shot_created")
+        await ctx.session.commit()
+        await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_shots)} 个镜头，接下来将进行角色设计。", progress=1.0)

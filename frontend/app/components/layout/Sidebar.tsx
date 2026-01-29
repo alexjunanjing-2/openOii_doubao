@@ -48,7 +48,6 @@ export function Sidebar() {
       // 移除该项目的所有相关缓存，防止 ID 复用时命中旧缓存
       queryClient.removeQueries({ queryKey: ["project", deletedId] });
       queryClient.removeQueries({ queryKey: ["characters", deletedId] });
-      queryClient.removeQueries({ queryKey: ["scenes", deletedId] });
       queryClient.removeQueries({ queryKey: ["shots", deletedId] });
       queryClient.removeQueries({ queryKey: ["messages", deletedId] });
       setDeleteTarget(null);
@@ -183,39 +182,41 @@ export function Sidebar() {
         </div>
 
         {/* 底部 */}
-        <div className="p-3 border-t-3 border-black">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleSettingsClick}
-                className="p-2 hover:bg-base-200 rounded-lg transition-colors cursor-pointer"
-                title="系统设置"
-                aria-label="系统设置"
-              >
-                <Cog6ToothIcon className="w-5 h-5 text-accent" />
-              </button>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-base-content/50">主题</span>
-              <button
-                onClick={toggleTheme}
-                className="p-2 hover:bg-base-200 rounded-lg transition-colors cursor-pointer"
-                title={theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"}
-                aria-label={
-                  theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"
-                }
-              >
-                {theme === "doodle" ? (
-                  <MoonIcon className="w-5 h-5" />
-                ) : (
-                  <SunIcon className="w-5 h-5" />
-                )}
-              </button>
-            </div>
+        <div className="p-3 border-t-3 border-black space-y-3">
+          {/* 设置按钮 - 涂鸦风格 */}
+          <button
+            onClick={handleSettingsClick}
+            className="w-full flex items-center gap-3 px-4 py-3 bg-base-200 hover:bg-base-300 border-3 border-base-content/30 rounded-lg shadow-brutal-sm hover:shadow-brutal hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer group"
+            title="系统设置"
+            aria-label="系统设置"
+          >
+            <Cog6ToothIcon className="w-5 h-5 text-accent group-hover:rotate-90 transition-transform duration-300" />
+            <span className="font-medium text-sm">系统设置</span>
+          </button>
+
+          {/* 主题切换 */}
+          <div className="flex items-center justify-between px-2">
+            <span className="text-xs text-base-content/60 font-medium">主题模式</span>
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 bg-base-200 hover:bg-base-300 border-2 border-base-content/20 rounded-lg transition-all duration-200 cursor-pointer"
+              title={theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"}
+              aria-label={
+                theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"
+              }
+            >
+              {theme === "doodle" ? (
+                <MoonIcon className="w-5 h-5" />
+              ) : (
+                <SunIcon className="w-5 h-5 text-warning" />
+              )}
+            </button>
           </div>
-          <div className="text-xs text-center text-base-content/50 font-sketch flex items-center justify-center gap-1 mt-2">
+
+          {/* 底部标语 */}
+          <div className="text-xs text-center text-base-content/50 font-sketch flex items-center justify-center gap-1 pt-1">
             <span>openOii - AI 漫剧生成器</span>
-            <SparklesIcon className="w-5 h-5" aria-hidden="true" />
+            <SparklesIcon className="w-4 h-4" aria-hidden="true" />
           </div>
         </div>
       </aside>

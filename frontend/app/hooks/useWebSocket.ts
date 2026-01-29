@@ -345,24 +345,6 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
         }
       }
       break;
-    case "scene_created":
-    case "scene_updated":
-      // 实时更新场景数据
-      if (event.data.scene) {
-        const scene = event.data.scene as any;
-        const currentScenes = store.scenes;
-        const existingIndex = currentScenes.findIndex((s) => s.id === scene.id);
-        if (existingIndex >= 0) {
-          // 更新现有场景
-          const newScenes = [...currentScenes];
-          newScenes[existingIndex] = scene;
-          store.setScenes(newScenes);
-        } else {
-          // 添加新场景
-          store.setScenes([...currentScenes, scene]);
-        }
-      }
-      break;
     case "shot_created":
     case "shot_updated":
       // 实时更新分镜数据
@@ -390,17 +372,6 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
         }
       }
       break;
-    case "scene_deleted":
-      // 删除场景
-      {
-        const sceneId = event.data.scene_id as number | undefined;
-        if (sceneId !== undefined) {
-          store.setScenes(store.scenes.filter((s) => s.id !== sceneId));
-          // 同时删除该场景下的所有分镜
-          store.setShots(store.shots.filter((s) => s.scene_id !== sceneId));
-        }
-      }
-      break;
     case "shot_deleted":
       // 删除分镜
       {
@@ -417,9 +388,6 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
         if (clearedTypes) {
           if (clearedTypes.includes("characters")) {
             store.setCharacters([]);
-          }
-          if (clearedTypes.includes("scenes")) {
-            store.setScenes([]);
           }
           if (clearedTypes.includes("shots")) {
             store.setShots([]);

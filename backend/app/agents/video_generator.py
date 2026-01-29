@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.utils import build_character_context
-from app.models.project import Character, Scene, Shot
+from app.models.project import Character, Shot
 from app.services.doubao_video import DoubaoVideoService
 from app.services.image_composer import ImageComposer
 
@@ -46,9 +46,8 @@ class VideoGeneratorAgent(BaseAgent):
         # 查找没有视频的 Shot（可按目标分镜过滤）
         query = (
             select(Shot)
-            .join(Scene, Shot.scene_id == Scene.id)
             .where(
-                Scene.project_id == ctx.project.id,
+                Shot.project_id == ctx.project.id,
                 Shot.video_url.is_(None),
             )
         )

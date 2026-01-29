@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import SessionDep
 from app.models.agent_run import AgentMessage, AgentRun
 from app.models.message import Message
-from app.models.project import Character, Project, Scene, Shot
+from app.models.project import Character, Project, Shot
 from app.schemas.project import (
     CharacterRead,
     MessageRead,
@@ -17,7 +17,6 @@ from app.schemas.project import (
     ProjectListRead,
     ProjectRead,
     ProjectUpdate,
-    SceneRead,
     ShotRead,
 )
 from app.services.file_cleaner import delete_file, delete_files
@@ -104,9 +103,8 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep):
     delete_files([c.image_url for c in chars])
 
     # 1.3 删除分镜图片和视频
-    scene_ids_subq = select(Scene.id).where(Scene.project_id == project_id)
     shots_res = await session.execute(
-        select(Shot).where(Shot.scene_id.in_(scene_ids_subq))
+        select(Shot).where(Shot.project_id == project_id)
     )
     shots = shots_res.scalars().all()
     delete_files([s.image_url for s in shots])
@@ -122,16 +120,13 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep):
     # 4. 删除 AgentRun
     await session.execute(delete(AgentRun).where(AgentRun.project_id == project_id))
 
-    # 5. 删除 Shot（通过 Scene 关联）
-    await session.execute(delete(Shot).where(Shot.scene_id.in_(scene_ids_subq)))
+    # 5. 删除 Shot
+    await session.execute(delete(Shot).where(Shot.project_id == project_id))
 
-    # 6. 删除 Scene
-    await session.execute(delete(Scene).where(Scene.project_id == project_id))
-
-    # 7. 删除 Character
+    # 6. 删除 Character
     await session.execute(delete(Character).where(Character.project_id == project_id))
 
-    # 8. 最后删除 Project
+    # 7. 最后删除 Project
     await session.delete(project)
     await session.commit()
     return None
@@ -146,17 +141,6 @@ async def list_characters(project_id: int, session: AsyncSession = SessionDep):
     return [CharacterRead.model_validate(c) for c in res.scalars().all()]
 
 
-@router.get("/{project_id}/scenes", response_model=list[SceneRead])
-async def list_scenes(project_id: int, session: AsyncSession = SessionDep):
-    project = await session.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    res = await session.execute(
-        select(Scene).where(Scene.project_id == project_id).order_by(Scene.order.asc())
-    )
-    return [SceneRead.model_validate(s) for s in res.scalars().all()]
-
-
 @router.get("/{project_id}/shots", response_model=list[ShotRead])
 async def list_shots(project_id: int, session: AsyncSession = SessionDep):
     project = await session.get(Project, project_id)
@@ -164,9 +148,8 @@ async def list_shots(project_id: int, session: AsyncSession = SessionDep):
         raise HTTPException(status_code=404, detail="Project not found")
     res = await session.execute(
         select(Shot)
-        .join(Scene, Shot.scene_id == Scene.id)
-        .where(Scene.project_id == project_id)
-        .order_by(Scene.order.asc(), Shot.order.asc())
+        .where(Shot.project_id == project_id)
+        .order_by(Shot.order.asc())
     )
     return [ShotRead.model_validate(s) for s in res.scalars().all()]
 

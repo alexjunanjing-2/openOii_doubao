@@ -17,7 +17,7 @@ from app.api.deps import SessionDep, SettingsDep, WsManagerDep
 from app.config import Settings
 from app.db.session import async_session_maker
 from app.models.agent_run import AgentRun
-from app.models.project import Project, Scene, Shot
+from app.models.project import Project, Shot
 from app.schemas.project import AgentRunRead, RegenerateRequest, ShotRead, ShotUpdate
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
@@ -36,7 +36,7 @@ def utcnow() -> datetime:
 def _shot_payload(shot: Shot) -> dict[str, Any]:
     return {
         "id": shot.id,
-        "scene_id": shot.scene_id,
+        "project_id": shot.project_id,
         "order": shot.order,
         "description": shot.description,
         "prompt": shot.prompt,
@@ -152,9 +152,7 @@ async def update_shot(
     if not shot:
         raise HTTPException(status_code=404, detail="Shot not found")
 
-    scene = await session.get(Scene, shot.scene_id)
-    if not scene:
-        raise HTTPException(status_code=404, detail="Scene not found")
+    project_id = shot.project_id
 
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
@@ -165,7 +163,7 @@ async def update_shot(
     await session.refresh(shot)
 
     await ws.send_event(
-        scene.project_id,
+        project_id,
         {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
     )
     return ShotRead.model_validate(shot)
@@ -186,11 +184,7 @@ async def regenerate_shot(
     if not shot:
         raise HTTPException(status_code=404, detail="Shot not found")
 
-    scene = await session.get(Scene, shot.scene_id)
-    if not scene:
-        raise HTTPException(status_code=404, detail="Scene not found")
-
-    project = await session.get(Project, scene.project_id)
+    project = await session.get(Project, shot.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     project_id = project.id
@@ -283,11 +277,7 @@ async def delete_shot(
     if not shot:
         raise HTTPException(status_code=404, detail="Shot not found")
 
-    scene = await session.get(Scene, shot.scene_id)
-    if not scene:
-        raise HTTPException(status_code=404, detail="Scene not found")
-
-    project_id = scene.project_id
+    project_id = shot.project_id
 
     # 删除分镜相关文件
     delete_file(shot.image_url)

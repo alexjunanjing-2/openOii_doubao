@@ -8,7 +8,7 @@ from sqlmodel import select
 import app.agents.orchestrator as orchestrator_mod
 from app.agents.orchestrator import GenerationOrchestrator
 from app.models.agent_run import AgentRun
-from app.models.project import Character, Project, Scene, Shot
+from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
 from app.services.llm import LLMResponse
 from tests.agent_fixtures import DummyWsManager
@@ -80,13 +80,7 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
             {
                 "project_update": {"status": "scripted"},
                 "characters": [{"name": "Hero", "description": "Brave"}],
-                "scenes": [
-                    {
-                        "order": 1,
-                        "description": "Scene 1",
-                        "shot_plan": [{"description": "Shot 1", "prompt": "Action"}],
-                    }
-                ],
+                "shots": [{"order": 1, "description": "Shot 1", "video_prompt": "Action"}],
             }
         ),
     ]
@@ -116,13 +110,8 @@ async def test_full_workflow(monkeypatch, test_session, test_settings):
     res = await test_session.execute(select(Character).where(Character.project_id == project.id))
     assert len(res.scalars().all()) == 1
 
-    res = await test_session.execute(select(Scene).where(Scene.project_id == project.id))
-    assert len(res.scalars().all()) == 1
-
-    res = await test_session.execute(
-        select(Shot).join(Scene).where(Scene.project_id == project.id)
-    )
-    shots = res.scalars().all()
+    res = await test_session.execute(select(Shot).where(Shot.project_id == project.id))
+    shots = list(res.scalars().all())
     assert len(shots) == 1
     assert shots[0].image_url
     assert shots[0].video_url

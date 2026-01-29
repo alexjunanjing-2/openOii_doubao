@@ -7,10 +7,10 @@ interface StageViewProps {
 }
 
 export function StageView({ projectId }: StageViewProps) {
-  const { currentStage, shots, scenes, characters } = useEditorStore();
+  const { currentStage, shots, characters } = useEditorStore();
 
   // 判断是否有内容
-  const hasContent = shots.length > 0 || scenes.length > 0 || characters.length > 0;
+  const hasContent = shots.length > 0 || characters.length > 0;
 
   // 如果有内容，优先显示Canvas（包括 deploy 阶段）
   if (hasContent) {

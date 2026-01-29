@@ -21,9 +21,6 @@ WsEventType = Literal[
     "character_created",     # 角色创建
     "character_updated",     # 角色更新（图片生成等）
     "character_deleted",     # 角色删除
-    "scene_created",         # 场景创建
-    "scene_updated",         # 场景更新
-    "scene_deleted",         # 场景删除
     "shot_created",          # 分镜创建
     "shot_updated",          # 分镜更新（图片/视频生成等）
     "shot_deleted",          # 分镜删除

@@ -2,14 +2,12 @@ import { create } from "zustand";
 import type {
   AgentMessage,
   Character,
-  Scene,
   Shot,
   WorkflowStage,
 } from "~/types";
 
 interface EditorState {
   // Selection state
-  selectedSceneId: number | null;
   selectedShotId: number | null;
   selectedCharacterId: number | null;
   highlightedMessageIndex: number | null;
@@ -28,13 +26,11 @@ interface EditorState {
 
   // Data cache
   characters: Character[];
-  scenes: Scene[];
   shots: Shot[];
   projectVideoUrl: string | null;  // 最终拼接视频 URL
   projectUpdatedAt: number | null; // 项目更新时间戳（用于触发刷新）
 
   // Actions
-  setSelectedScene: (id: number | null) => void;
   setSelectedShot: (id: number | null) => void;
   setSelectedCharacter: (id: number | null) => void;
   setHighlightedMessage: (index: number | null) => void;
@@ -46,7 +42,6 @@ interface EditorState {
   setMessages: (messages: AgentMessage[]) => void;
   clearMessages: () => void;
   setCharacters: (characters: Character[]) => void;
-  setScenes: (scenes: Scene[]) => void;
   setShots: (shots: Shot[]) => void;
   setProjectVideoUrl: (url: string | null) => void;
   setProjectUpdatedAt: (timestamp: number) => void;
@@ -54,16 +49,13 @@ interface EditorState {
   setCurrentRunId: (runId: number | null) => void;
   // 精细化控制 Actions
   updateCharacter: (character: Character) => void;
-  updateScene: (scene: Scene) => void;
   updateShot: (shot: Shot) => void;
-  removeScene: (sceneId: number) => void;
   removeCharacter: (characterId: number) => void;
   removeShot: (shotId: number) => void;
   reset: () => void;
 }
 
 const initialState = {
-  selectedSceneId: null,
   selectedShotId: null,
   selectedCharacterId: null,
   highlightedMessageIndex: null,
@@ -76,7 +68,6 @@ const initialState = {
   awaitingAgent: null,
   currentRunId: null,
   characters: [],
-  scenes: [],
   shots: [],
   projectVideoUrl: null,
   projectUpdatedAt: null,
@@ -85,7 +76,6 @@ const initialState = {
 export const useEditorStore = create<EditorState>((set) => ({
   ...initialState,
 
-  setSelectedScene: (id) => set({ selectedSceneId: id }),
   setSelectedShot: (id) => set({ selectedShotId: id }),
   setSelectedCharacter: (id) => set({ selectedCharacterId: id }),
   setHighlightedMessage: (index) => set({ highlightedMessageIndex: index }),
@@ -98,7 +88,6 @@ export const useEditorStore = create<EditorState>((set) => ({
   setMessages: (messages) => set({ messages }),
   clearMessages: () => set({ messages: [], highlightedMessageIndex: null }),
   setCharacters: (characters) => set({ characters }),
-  setScenes: (scenes) => set({ scenes }),
   setShots: (shots) => set({ shots }),
   setProjectVideoUrl: (url) => set({ projectVideoUrl: url }),
   setProjectUpdatedAt: (timestamp) => set({ projectUpdatedAt: timestamp }),
@@ -116,22 +105,11 @@ export const useEditorStore = create<EditorState>((set) => ({
         c.id === character.id ? character : c
       ),
     })),
-  updateScene: (scene) =>
-    set((state) => ({
-      scenes: state.scenes.map((s) =>
-        s.id === scene.id ? scene : s
-      ),
-    })),
   updateShot: (shot) =>
     set((state) => ({
       shots: state.shots.map((s) =>
         s.id === shot.id ? shot : s
       ),
-    })),
-  removeScene: (sceneId) =>
-    set((state) => ({
-      scenes: state.scenes.filter((s) => s.id !== sceneId),
-      shots: state.shots.filter((s) => s.scene_id !== sceneId),
     })),
   removeCharacter: (characterId) =>
     set((state) => ({

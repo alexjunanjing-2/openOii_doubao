@@ -24,11 +24,10 @@ class TargetIds:
     """精细化控制的目标 ID"""
     character_ids: list[int] = field(default_factory=list)
     shot_ids: list[int] = field(default_factory=list)
-    scene_ids: list[int] = field(default_factory=list)
 
     def has_targets(self) -> bool:
         """是否有指定的目标"""
-        return bool(self.character_ids or self.shot_ids or self.scene_ids)
+        return bool(self.character_ids or self.shot_ids)
 
 
 @dataclass
@@ -105,23 +104,6 @@ class BaseAgent:
             },
         )
 
-    async def send_scene_event(self, ctx: AgentContext, scene: Any, event_type: str = "scene_created") -> None:
-        """发送场景创建/更新事件"""
-        await ctx.ws.send_event(
-            ctx.project.id,
-            {
-                "type": event_type,
-                "data": {
-                    "scene": {
-                        "id": scene.id,
-                        "project_id": scene.project_id,
-                        "order": scene.order,
-                        "description": scene.description,
-                    }
-                },
-            },
-        )
-
     async def send_shot_event(self, ctx: AgentContext, shot: Any, event_type: str = "shot_created") -> None:
         """发送分镜创建/更新事件"""
         await ctx.ws.send_event(
@@ -131,7 +113,7 @@ class BaseAgent:
                 "data": {
                     "shot": {
                         "id": shot.id,
-                        "scene_id": shot.scene_id,
+                        "project_id": shot.project_id,
                         "order": shot.order,
                         "description": shot.description,
                         "prompt": shot.prompt,

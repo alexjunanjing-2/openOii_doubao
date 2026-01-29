@@ -53,7 +53,6 @@ export function ProjectsPage() {
       // 移除该项目的所有相关缓存，防止 ID 复用时命中旧缓存
       queryClient.removeQueries({ queryKey: ["project", deletedId] });
       queryClient.removeQueries({ queryKey: ["characters", deletedId] });
-      queryClient.removeQueries({ queryKey: ["scenes", deletedId] });
       queryClient.removeQueries({ queryKey: ["shots", deletedId] });
       queryClient.removeQueries({ queryKey: ["messages", deletedId] });
       setDeleteTarget(null);

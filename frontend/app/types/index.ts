@@ -21,16 +21,9 @@ export interface Character {
   image_url: string | null;
 }
 
-export interface Scene {
-  id: number;
-  project_id: number;
-  order: number;
-  description: string;
-}
-
 export interface Shot {
   id: number;
-  scene_id: number;
+  project_id: number;
   order: number;
   description: string;
   prompt: string | null;        // 视频生成 prompt
@@ -68,9 +61,6 @@ export type WsEventType =
   | "character_created"
   | "character_updated"
   | "character_deleted"
-  | "scene_created"
-  | "scene_updated"
-  | "scene_deleted"
   | "shot_created"
   | "shot_updated"
   | "shot_deleted"

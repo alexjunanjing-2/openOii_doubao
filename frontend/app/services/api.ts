@@ -100,10 +100,7 @@ export const projectsApi = {
   
   getCharacters: (id: number) =>
     fetchApi<import("~/types").Character[]>(`/api/v1/projects/${id}/characters`),
-  
-  getScenes: (id: number) =>
-    fetchApi<import("~/types").Scene[]>(`/api/v1/projects/${id}/scenes`),
-  
+
   getShots: (id: number) =>
     fetchApi<import("~/types").Shot[]>(`/api/v1/projects/${id}/shots`),
 
@@ -158,19 +155,6 @@ export const charactersApi = {
     }),
   delete: (id: number) =>
     fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),
-};
-
-// Scenes API
-export const scenesApi = {
-  update: (id: number, data: Partial<import("~/types").Scene>) =>
-    fetchApi<import("~/types").Scene>(`/api/v1/scenes/${id}`, {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  delete: (id: number) =>
-    fetchApi<void>(`/api/v1/scenes/${id}`, {
-      method: "DELETE",
-    }),
 };
 
 // Config API

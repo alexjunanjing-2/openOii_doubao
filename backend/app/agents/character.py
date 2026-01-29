@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.character import SYSTEM_PROMPT
 from app.agents.utils import extract_json
-from app.models.project import Character, Scene
+from app.models.project import Character, Shot
 
 
 class CharacterAgent(BaseAgent):
@@ -43,9 +43,10 @@ class CharacterAgent(BaseAgent):
         chars = res.scalars().all()
         if chars:
             return
-
-        res = await ctx.session.execute(select(Scene).where(Scene.project_id == ctx.project.id).order_by(Scene.order.asc()))
-        scenes = res.scalars().all()
+        res = await ctx.session.execute(
+            select(Shot).where(Shot.project_id == ctx.project.id).order_by(Shot.order.asc())
+        )
+        shots = res.scalars().all()
 
         user_prompt = json.dumps(
             {
@@ -56,7 +57,7 @@ class CharacterAgent(BaseAgent):
                     "style": ctx.project.style,
                     "status": ctx.project.status,
                 },
-                "scenes": [{"order": s.order, "description": s.description} for s in scenes],
+                "shots": [{"order": s.order, "description": s.description} for s in shots],
                 "existing_characters": [],
             },
             ensure_ascii=False,

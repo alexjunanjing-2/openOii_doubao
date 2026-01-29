@@ -1,9 +1,9 @@
-import { ProjectOverview } from "./ProjectOverview";
+import { InfiniteCanvas } from "./InfiniteCanvas";
 
 interface CanvasProps {
   projectId: number;
 }
 
 export function Canvas({ projectId }: CanvasProps) {
-  return <ProjectOverview projectId={projectId} />;
+  return <InfiniteCanvas projectId={projectId} />;
 }

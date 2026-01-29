@@ -212,151 +212,29 @@ async def delete_character(args: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================================
-# 场景管理工具
-# ============================================================================
-
-@tool("list_scenes", "列出项目的所有场景", {})
-async def list_scenes(args: dict[str, Any]) -> dict[str, Any]:
-    """列出所有场景"""
-    from sqlalchemy import select
-    from app.models.project import Scene
-
-    if not agent_state.session or not agent_state.project_id:
-        return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    res = await agent_state.session.execute(
-        select(Scene)
-        .where(Scene.project_id == agent_state.project_id)
-        .order_by(Scene.order)
-    )
-    scenes = res.scalars().all()
-
-    if not scenes:
-        return _tool_text("项目暂无场景")
-
-    text = "场景列表:\n"
-    for s in scenes:
-        text += f"- [{s.id}] 场景 {s.order}: {s.description[:50] if s.description else '无描述'}...\n"
-
-    return _tool_text(text)
-
-
-@tool("create_scene", "创建新场景", {"order": int, "description": str})
-async def create_scene(args: dict[str, Any]) -> dict[str, Any]:
-    """创建场景"""
-    from app.models.project import Scene
-
-    if not agent_state.session or not agent_state.project_id:
-        return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    order = args.get("order", 1)
-    description = args.get("description", "").strip()
-
-    if not description:
-        return _tool_text("错误：场景描述不能为空", is_error=True)
-
-    scene = Scene(
-        project_id=agent_state.project_id,
-        order=order,
-        description=description,
-    )
-    agent_state.session.add(scene)
-    await agent_state.session.commit()
-    await agent_state.session.refresh(scene)
-
-    return _tool_text(f"已创建场景 [{scene.id}] 场景 {scene.order}")
-
-
-@tool("update_scene", "更新场景信息", {"scene_id": int, "order": int, "description": str})
-async def update_scene(args: dict[str, Any]) -> dict[str, Any]:
-    """更新场景"""
-    from app.models.project import Scene
-
-    if not agent_state.session:
-        return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    scene_id = args.get("scene_id")
-    if not scene_id:
-        return _tool_text("错误：需要指定场景 ID", is_error=True)
-
-    scene = await agent_state.session.get(Scene, scene_id)
-    if not scene:
-        return _tool_text(f"错误：场景 {scene_id} 不存在", is_error=True)
-
-    updated = []
-    if "order" in args and args["order"]:
-        scene.order = args["order"]
-        updated.append(f"顺序: {scene.order}")
-    if "description" in args and args["description"]:
-        scene.description = args["description"].strip()
-        updated.append(f"描述: {scene.description[:30]}...")
-
-    if updated:
-        agent_state.session.add(scene)
-        await agent_state.session.commit()
-        return _tool_text(f"已更新场景 [{scene_id}]:\n" + "\n".join(f"- {u}" for u in updated))
-
-    return _tool_text("没有需要更新的内容")
-
-
-@tool("delete_scene", "删除场景（同时删除关联的分镜）", {"scene_id": int})
-async def delete_scene(args: dict[str, Any]) -> dict[str, Any]:
-    """删除场景"""
-    from sqlalchemy import select
-    from app.models.project import Scene, Shot
-
-    if not agent_state.session:
-        return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    scene_id = args.get("scene_id")
-    if not scene_id:
-        return _tool_text("错误：需要指定场景 ID", is_error=True)
-
-    scene = await agent_state.session.get(Scene, scene_id)
-    if not scene:
-        return _tool_text(f"错误：场景 {scene_id} 不存在", is_error=True)
-
-    # 删除关联的分镜
-    res = await agent_state.session.execute(select(Shot).where(Shot.scene_id == scene_id))
-    shots = res.scalars().all()
-    for shot in shots:
-        await agent_state.session.delete(shot)
-
-    order = scene.order
-    await agent_state.session.delete(scene)
-    await agent_state.session.commit()
-
-    return _tool_text(f"已删除场景 {order}（包含 {len(shots)} 个分镜）")
-
-
-# ============================================================================
 # 分镜管理工具
 # ============================================================================
 
-@tool("list_shots", "列出场景的所有分镜", {"scene_id": int})
+@tool("list_shots", "列出项目的所有分镜", {})
 async def list_shots(args: dict[str, Any]) -> dict[str, Any]:
     """列出分镜"""
     from sqlalchemy import select
     from app.models.project import Shot
 
-    if not agent_state.session:
+    if not agent_state.session or not agent_state.project_id:
         return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    scene_id = args.get("scene_id")
-    if not scene_id:
-        return _tool_text("错误：需要指定场景 ID", is_error=True)
 
     res = await agent_state.session.execute(
         select(Shot)
-        .where(Shot.scene_id == scene_id)
+        .where(Shot.project_id == agent_state.project_id)
         .order_by(Shot.order)
     )
     shots = res.scalars().all()
 
     if not shots:
-        return _tool_text(f"场景 {scene_id} 暂无分镜")
+        return _tool_text("项目暂无分镜")
 
-    text = f"场景 {scene_id} 的分镜列表:\n"
+    text = "分镜列表:\n"
     for s in shots:
         text += f"- [{s.id}] 镜头 {s.order}: {s.description[:40] if s.description else '无描述'}...\n"
         text += f"  图片: {'有' if s.image_url else '无'} | 视频: {'有' if s.video_url else '无'}\n"
@@ -365,7 +243,6 @@ async def list_shots(args: dict[str, Any]) -> dict[str, Any]:
 
 
 @tool("create_shot", "创建新分镜", {
-    "scene_id": int,
     "order": int,
     "description": str,
     "prompt": str,
@@ -375,12 +252,8 @@ async def create_shot(args: dict[str, Any]) -> dict[str, Any]:
     """创建分镜"""
     from app.models.project import Shot
 
-    if not agent_state.session:
+    if not agent_state.session or not agent_state.project_id:
         return _tool_text("错误：未设置项目上下文", is_error=True)
-
-    scene_id = args.get("scene_id")
-    if not scene_id:
-        return _tool_text("错误：需要指定场景 ID", is_error=True)
 
     order = args.get("order", 1)
     description = args.get("description", "").strip()
@@ -391,7 +264,7 @@ async def create_shot(args: dict[str, Any]) -> dict[str, Any]:
         return _tool_text("错误：分镜描述不能为空", is_error=True)
 
     shot = Shot(
-        scene_id=scene_id,
+        project_id=agent_state.project_id,
         order=order,
         description=description,
         prompt=prompt,
@@ -533,11 +406,6 @@ ALL_TOOLS = [
     create_character,
     update_character,
     delete_character,
-    # 场景
-    list_scenes,
-    create_scene,
-    update_scene,
-    delete_scene,
     # 分镜
     list_shots,
     create_shot,
@@ -565,10 +433,6 @@ ALLOWED_TOOLS = [
     "mcp__openOii__create_character",
     "mcp__openOii__update_character",
     "mcp__openOii__delete_character",
-    "mcp__openOii__list_scenes",
-    "mcp__openOii__create_scene",
-    "mcp__openOii__update_scene",
-    "mcp__openOii__delete_scene",
     "mcp__openOii__list_shots",
     "mcp__openOii__create_shot",
     "mcp__openOii__update_shot",

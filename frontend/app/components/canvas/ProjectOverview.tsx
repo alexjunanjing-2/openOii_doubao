@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEditorStore } from "~/stores/editorStore";
-import { projectsApi, shotsApi, charactersApi, scenesApi, getStaticUrl } from "~/services/api";
-import type { Shot, Character, Scene } from "~/types";
+import { projectsApi, shotsApi, charactersApi, getStaticUrl } from "~/services/api";
+import type { Shot, Character } from "~/types";
 import {
   BookOpenIcon,
   ClipboardDocumentListIcon,
@@ -163,15 +163,13 @@ function PreviewableImage({
 }
 
 export function ProjectOverview({ projectId }: ProjectOverviewProps) {
-  const { characters, scenes, shots, projectVideoUrl, updateCharacter, updateScene, updateShot, removeScene, removeCharacter, removeShot } = useEditorStore();
+  const { characters, shots, projectVideoUrl, updateCharacter, updateShot, removeCharacter, removeShot } = useEditorStore();
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ src: string; title: string } | null>(null);
 
   // 编辑状态
   const [editingCharacter, setEditingCharacter] = useState<Character | null>(null);
   const [editingShot, setEditingShot] = useState<Shot | null>(null);
-  const [editingScene, setEditingScene] = useState<Scene | null>(null);
-  const [deletingScene, setDeletingScene] = useState<Scene | null>(null);
   const [deletingCharacter, setDeletingCharacter] = useState<Character | null>(null);
   const [deletingShot, setDeletingShot] = useState<Shot | null>(null);
 
@@ -263,23 +261,6 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
     },
   });
 
-  const updateSceneMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Scene> }) =>
-      scenesApi.update(id, data),
-    onSuccess: (updatedScene) => {
-      updateScene(updatedScene);
-      setEditingScene(null);
-    },
-  });
-
-  const deleteSceneMutation = useMutation({
-    mutationFn: (id: number) => scenesApi.delete(id),
-    onSuccess: (_, deletedId) => {
-      removeScene(deletedId);
-      setDeletingScene(null);
-    },
-  });
-
   const deleteCharacterMutation = useMutation({
     mutationFn: (id: number) => charactersApi.delete(id),
     onSuccess: (_, deletedId) => {
@@ -301,16 +282,9 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
   // 只有当 URL 存在且不为空字符串时才显示最终视频
   const finalVideoUrl = rawVideoUrl ? getStaticUrl(rawVideoUrl) : null;
 
-  // 按场景组织分镜
-  const shotsByScene = shots.reduce((acc, shot) => {
-    if (!acc[shot.scene_id]) {
-      acc[shot.scene_id] = [];
-    }
-    acc[shot.scene_id].push(shot);
-    return acc;
-  }, {} as Record<number, Shot[]>);
+  const orderedShots = [...shots].sort((a, b) => a.order - b.order);
 
-  const hasContent = project?.summary || characters.length > 0 || scenes.length > 0;
+  const hasContent = project?.summary || characters.length > 0 || shots.length > 0;
 
   const handleImagePreview = (src: string, alt: string) => {
     setPreviewImage({ src, alt });
@@ -377,22 +351,6 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
       icon: TrashIcon,
       label: "删除",
       onClick: () => setDeletingShot(shot),
-      variant: "error",
-    },
-  ];
-
-  // 场景操作
-  const getSceneActions = (scene: Scene): ActionItem[] => [
-    {
-      icon: PencilIcon,
-      label: "编辑",
-      onClick: () => setEditingScene(scene),
-      variant: "ghost",
-    },
-    {
-      icon: TrashIcon,
-      label: "删除",
-      onClick: () => setDeletingScene(scene),
       variant: "error",
     },
   ];
@@ -469,90 +427,68 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
         {/* 分镜脚本 */}
         <Section
-          title={`分镜脚本 (${scenes.length} 场景, ${shots.length} 镜头)`}
+          title={`分镜脚本 (${shots.length} 镜头)`}
           icon={<FilmIcon className="w-5 h-5" aria-hidden="true" />}
-          isEmpty={scenes.length === 0}
+          isEmpty={shots.length === 0}
           emptyText="分镜正在生成中..."
         >
-          <div className="space-y-6">
-            {scenes
-              .sort((a, b) => a.order - b.order)
-              .map((scene) => {
-                const sceneShots = shotsByScene[scene.id] || [];
-                return (
-                  <HoverActionBar key={scene.id} actions={getSceneActions(scene)}>
-                    <div className="card-doodle p-4 bg-base-100">
-                      <div className="flex items-start gap-3 mb-3">
-                        <span className="badge badge-primary font-bold shrink-0 text-primary-content">场景 {scene.order}</span>
-                        <p className="text-sm text-base-content/90 flex-1">{scene.description}</p>
-                      </div>
-
-                      {sceneShots.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
-                          {sceneShots
-                            .sort((a, b) => a.order - b.order)
-                            .map((shot) => {
-                              const shotImageUrl = getStaticUrl(shot.image_url);
-                              const shotVideoUrl = getStaticUrl(shot.video_url);
-                              return (
-                                <HoverActionBar key={shot.id} actions={getShotActions(shot)}>
-                                  <div className="bg-base-200 rounded-lg p-2 hover:bg-base-300 transition-colors relative">
-                                    {regeneratingShotId === shot.id && (
-                                      <LoadingOverlay text={regeneratingShotType === "image" ? "生成图片..." : "生成视频..."} />
-                                    )}
-                                    {shotImageUrl && (
-                                      <PreviewableImage
-                                        src={shotImageUrl}
-                                        alt={`镜头 ${shot.order}`}
-                                        className="w-full h-24 object-cover rounded"
-                                        onPreview={handleImagePreview}
-                                      />
-                                    )}
-                                    {shotVideoUrl && (
-                                      <div
-                                        className="relative mt-2 cursor-pointer"
-                                        onClick={() => handleVideoPreview(shotVideoUrl, `镜头 ${shot.order}`)}
-                                      >
-                                        <video
-                                          src={shotVideoUrl}
-                                          className="w-full h-24 object-cover rounded"
-                                          muted
-                                          loop
-                                          onMouseEnter={(e) => e.currentTarget.play()}
-                                          onMouseLeave={(e) => {
-                                            e.currentTarget.pause();
-                                            e.currentTarget.currentTime = 0;
-                                          }}
-                                        />
-                                        <span className="absolute top-1 right-1 badge badge-success badge-xs text-success-content">
-                                          视频
-                                        </span>
-                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded">
-                                          <span className="text-primary-content text-2xl">▶</span>
-                                        </div>
-                                      </div>
-                                    )}
-                                    {!shotImageUrl && !shotVideoUrl && (
-                                      <div className="w-full h-24 bg-base-300 rounded flex items-center justify-center">
-                                        <RectangleStackIcon className="w-6 h-6" aria-hidden="true" />
-                                      </div>
-                                    )}
-                                    <div className="mt-1">
-                                      <span className="text-xs font-bold">#{shot.order}</span>
-                                      <p className="text-xs text-base-content/70">
-                                        {shot.description}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </HoverActionBar>
-                              );
-                            })}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {orderedShots.map((shot) => {
+              const shotImageUrl = getStaticUrl(shot.image_url);
+              const shotVideoUrl = getStaticUrl(shot.video_url);
+              return (
+                <HoverActionBar key={shot.id} actions={getShotActions(shot)}>
+                  <div className="bg-base-200 rounded-lg p-2 hover:bg-base-300 transition-colors relative">
+                    {regeneratingShotId === shot.id && (
+                      <LoadingOverlay text={regeneratingShotType === "image" ? "生成图片..." : "生成视频..."} />
+                    )}
+                    {shotImageUrl && (
+                      <PreviewableImage
+                        src={shotImageUrl}
+                        alt={`镜头 ${shot.order}`}
+                        className="w-full h-24 object-cover rounded"
+                        onPreview={handleImagePreview}
+                      />
+                    )}
+                    {shotVideoUrl && (
+                      <div
+                        className="relative mt-2 cursor-pointer"
+                        onClick={() => handleVideoPreview(shotVideoUrl, `镜头 ${shot.order}`)}
+                      >
+                        <video
+                          src={shotVideoUrl}
+                          className="w-full h-24 object-cover rounded"
+                          muted
+                          loop
+                          onMouseEnter={(e) => e.currentTarget.play()}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.pause();
+                            e.currentTarget.currentTime = 0;
+                          }}
+                        />
+                        <span className="absolute top-1 right-1 badge badge-success badge-xs text-success-content">
+                          视频
+                        </span>
+                        <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded">
+                          <span className="text-primary-content text-2xl">▶</span>
                         </div>
-                      )}
+                      </div>
+                    )}
+                    {!shotImageUrl && !shotVideoUrl && (
+                      <div className="w-full h-24 bg-base-300 rounded flex items-center justify-center">
+                        <RectangleStackIcon className="w-6 h-6" aria-hidden="true" />
+                      </div>
+                    )}
+                    <div className="mt-1">
+                      <span className="text-xs font-bold">#{shot.order}</span>
+                      <p className="text-xs text-base-content/70">
+                        {shot.description}
+                      </p>
                     </div>
-                  </HoverActionBar>
-                );
-              })}
+                  </div>
+                </HoverActionBar>
+              );
+            })}
           </div>
         </Section>
 
@@ -681,44 +617,6 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
             image_prompt: editingShot.image_prompt || "",
           }}
           isLoading={updateShotMutation.isPending}
-        />
-      )}
-
-      {/* 场景编辑 Modal */}
-      {editingScene && (
-        <EditModal
-          isOpen={true}
-          onClose={() => setEditingScene(null)}
-          onSave={async (data) => {
-            await updateSceneMutation.mutateAsync({
-              id: editingScene.id,
-              data: { description: data.description },
-            });
-          }}
-          title="编辑场景"
-          fields={[
-            { name: "description", label: "场景描述", type: "textarea" },
-          ]}
-          initialData={{
-            description: editingScene.description,
-          }}
-          isLoading={updateSceneMutation.isPending}
-        />
-      )}
-
-      {/* 删除场景确认 Modal */}
-      {deletingScene && (
-        <ConfirmModal
-          isOpen={true}
-          onClose={() => setDeletingScene(null)}
-          onConfirm={async () => {
-            await deleteSceneMutation.mutateAsync(deletingScene.id);
-          }}
-          title="删除场景"
-          message={`确定要删除「场景 ${deletingScene.order}」吗？这将同时删除该场景下的所有分镜，此操作不可撤销。`}
-          confirmText="删除"
-          variant="danger"
-          isLoading={deleteSceneMutation.isPending}
         />
       )}
 

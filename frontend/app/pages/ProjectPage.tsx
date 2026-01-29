@@ -62,12 +62,6 @@ export function ProjectPage() {
     enabled: !!project,
   });
 
-  const { data: scenes } = useQuery({
-    queryKey: ["scenes", projectId],
-    queryFn: () => projectsApi.getScenes(projectId),
-    enabled: !!project,
-  });
-
   const { data: shots } = useQuery({
     queryKey: ["shots", projectId],
     queryFn: () => projectsApi.getShots(projectId),
@@ -84,10 +78,6 @@ export function ProjectPage() {
   useEffect(() => {
     if (characters) store.setCharacters(characters);
   }, [characters, projectId]);
-
-  useEffect(() => {
-    if (scenes) store.setScenes(scenes);
-  }, [scenes, projectId]);
 
   useEffect(() => {
     if (shots) store.setShots(shots);
@@ -122,7 +112,6 @@ export function ProjectPage() {
     store.setCurrentRunId(null);
 
     // 清空选中状态
-    store.setSelectedScene(null);
     store.setSelectedShot(null);
     store.setSelectedCharacter(null);
     store.setHighlightedMessage(null);
@@ -130,7 +119,7 @@ export function ProjectPage() {
     // 清空项目视频
     store.setProjectVideoUrl(null);
 
-    // 注意：不清空画布数据（characters/scenes/shots），让 React Query 的数据自然覆盖
+    // 注意：不清空画布数据（characters/shots），让 React Query 的数据自然覆盖
     // 避免竞态条件导致数据被清空
   }, [projectId]);
 
@@ -279,7 +268,6 @@ export function ProjectPage() {
   useEffect(() => {
     if (!store.isGenerating && store.progress === 1) {
       queryClient.invalidateQueries({ queryKey: ["characters", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["scenes", projectId] });
       queryClient.invalidateQueries({ queryKey: ["shots", projectId] });
     }
   }, [store.isGenerating, store.progress, projectId, queryClient]);

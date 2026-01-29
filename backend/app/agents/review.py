@@ -9,7 +9,7 @@ from app.agents.base import AgentContext, BaseAgent, TargetIds
 from app.agents.prompts.review import SYSTEM_PROMPT
 from app.agents.utils import extract_json
 from app.models.agent_run import AgentMessage
-from app.models.project import Character, Scene, Shot
+from app.models.project import Character, Shot
 
 
 ALLOWED_START_AGENTS = {
@@ -50,22 +50,12 @@ class ReviewAgent(BaseAgent):
         char_res = await ctx.session.execute(select(Character).where(Character.project_id == ctx.project.id))
         characters = list(char_res.scalars().all())
 
-        scene_res = await ctx.session.execute(
-            select(Scene).where(Scene.project_id == ctx.project.id).order_by(Scene.order.asc())
-        )
-        scenes = list(scene_res.scalars().all())
-
         shot_res = await ctx.session.execute(
             select(Shot)
-            .join(Scene, Shot.scene_id == Scene.id)
-            .where(Scene.project_id == ctx.project.id)
-            .order_by(Scene.order.asc(), Shot.order.asc())
+            .where(Shot.project_id == ctx.project.id)
+            .order_by(Shot.order.asc())
         )
         shots = list(shot_res.scalars().all())
-
-        shot_map: dict[int, list[Shot]] = {}
-        for shot in shots:
-            shot_map.setdefault(shot.scene_id, []).append(shot)
 
         return {
             "project": {
@@ -85,26 +75,18 @@ class ReviewAgent(BaseAgent):
                 }
                 for c in characters
             ],
-            "scenes": [
+            "shots": [
                 {
-                    "id": s.id,
-                    "order": s.order,
-                    "description": s.description,
-                    "shots": [
-                        {
-                            "id": sh.id,
-                            "order": sh.order,
-                            "description": sh.description,
-                            "prompt": sh.prompt,
-                            "image_prompt": sh.image_prompt,
-                            "image_url": sh.image_url,
-                            "video_url": sh.video_url,
-                            "duration": sh.duration,
-                        }
-                        for sh in shot_map.get(s.id or 0, [])
-                    ],
+                    "id": sh.id,
+                    "order": sh.order,
+                    "description": sh.description,
+                    "prompt": sh.prompt,
+                    "image_prompt": sh.image_prompt,
+                    "image_url": sh.image_url,
+                    "video_url": sh.video_url,
+                    "duration": sh.duration,
                 }
-                for s in scenes
+                for sh in shots
             ],
         }
 
@@ -159,16 +141,13 @@ class ReviewAgent(BaseAgent):
         if isinstance(raw_target_ids, dict):
             character_ids = raw_target_ids.get("character_ids") or []
             shot_ids = raw_target_ids.get("shot_ids") or []
-            scene_ids = raw_target_ids.get("scene_ids") or []
             # 确保都是整数列表
             character_ids = [int(x) for x in character_ids if isinstance(x, (int, float))]
             shot_ids = [int(x) for x in shot_ids if isinstance(x, (int, float))]
-            scene_ids = [int(x) for x in scene_ids if isinstance(x, (int, float))]
-            if character_ids or shot_ids or scene_ids:
+            if character_ids or shot_ids:
                 target_ids = TargetIds(
                     character_ids=character_ids,
                     shot_ids=shot_ids,
-                    scene_ids=scene_ids,
                 )
 
         if start_agent not in ALLOWED_START_AGENTS:
@@ -188,8 +167,6 @@ class ReviewAgent(BaseAgent):
                 parts.append(f"{len(target_ids.character_ids)} 个角色")
             if target_ids.shot_ids:
                 parts.append(f"{len(target_ids.shot_ids)} 个分镜")
-            if target_ids.scene_ids:
-                parts.append(f"{len(target_ids.scene_ids)} 个场景")
             target_info = f"（仅处理 {', '.join(parts)}）"
 
         await self.send_message(ctx, f"{msg_summary}。将从 @{start_agent} 开始{mode_desc}{target_info}。{msg_reason}".strip())

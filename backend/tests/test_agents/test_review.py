@@ -27,7 +27,7 @@ async def test_review_agent_routing_with_targets(test_session, test_settings):
     payload = {
         "analysis": {"feedback_type": "character", "summary": "Adjust character"},
         "routing": {"start_agent": "character_artist", "mode": "incremental", "reason": "Fix"},
-        "target_ids": {"character_ids": [1], "shot_ids": [2], "scene_ids": [3]},
+        "target_ids": {"character_ids": [1], "shot_ids": [2]},
     }
     llm = FakeLLM(json.dumps(payload))
     ctx = await make_context(test_session, test_settings, project=project, run=run, llm=llm)
@@ -37,3 +37,4 @@ async def test_review_agent_routing_with_targets(test_session, test_settings):
     assert result["start_agent"] == "character_artist"
     assert result["mode"] == "incremental"
     assert result["target_ids"].character_ids == [1]
+    assert result["target_ids"].shot_ids == [2]

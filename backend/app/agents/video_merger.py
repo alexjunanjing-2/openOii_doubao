@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
-from app.models.project import Scene, Shot
+from app.models.project import Shot
 
 
 class VideoMergerAgent(BaseAgent):
@@ -19,12 +19,11 @@ class VideoMergerAgent(BaseAgent):
         # 获取所有带视频的 Shot，按场景和镜头顺序排序
         res = await ctx.session.execute(
             select(Shot)
-            .join(Scene, Shot.scene_id == Scene.id)
             .where(
-                Scene.project_id == ctx.project.id,
+                Shot.project_id == ctx.project.id,
                 Shot.video_url.isnot(None)
             )
-            .order_by(Scene.order.asc(), Shot.order.asc())
+            .order_by(Shot.order.asc())
         )
         shots = res.scalars().all()
 
