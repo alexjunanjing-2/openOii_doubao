@@ -59,10 +59,10 @@ class DirectorAgent(BaseAgent):
             if mood:
                 lines.append(f"🌙 情绪基调：{mood}")
 
-        # 场景规划 - 显示全部场景
+        # 剧情大纲 - 显示故事段落
         scene_outline = data.get("scene_outline") or []
         if isinstance(scene_outline, list) and scene_outline:
-            lines.append(f"📋 场景规划：共 {len(scene_outline)} 个场景")
+            lines.append(f"📋 剧情大纲：共 {len(scene_outline)} 个段落")
             for i, scene in enumerate(scene_outline):
                 if isinstance(scene, dict):
                     title = scene.get("title") or scene.get("description", "")[:30]

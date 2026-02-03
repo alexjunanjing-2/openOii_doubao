@@ -199,10 +199,10 @@
   /* 确保 Tailwind 类在 Shape 内生效 */
 }
 
-/* 选中状态指示器 */
-.infinite-canvas-container .tl-selection__fg {
-  stroke: oklch(var(--p));
-  stroke-width: 2px;
+/* 隐藏选中状态指示器（自定义 shapes 已通过 hideSelectionBoundsFg/Bg 禁用） */
+.infinite-canvas-container .tl-selection__fg,
+.infinite-canvas-container .tl-selection__bg {
+  display: none !important;
 }
 
 /* 禁用 tldraw 内部的 hover 效果，使用自定义的 card-doodle hover */

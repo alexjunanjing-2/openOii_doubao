@@ -57,8 +57,8 @@ export type VideoSectionShape = TLBaseShape<
 export type ConnectorShape = TLBaseShape<
   typeof SHAPE_TYPES.CONNECTOR,
   {
-    start: { x: number; y: number };
-    end: { x: number; y: number };
+    fromId: string;
+    toId: string;
   }
 >;
 

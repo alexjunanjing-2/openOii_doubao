@@ -34,9 +34,18 @@ openOii 是一个基于 AI Agent 的智能漫剧生成平台，通过多智能�
 
 ---
 
+## 📋 更新日志
+
+### 2026.02.03
+
+- ✨ **无限画布** - 将项目画布替换为 tldraw 无限画布，支持自由拖动、缩放各个卡片（剧本、角色、分镜、视频）
+- ⚙️ **配置管理** - 新增前端环境变量配置界面，支持在线修改数据库、LLM、图像、视频服务配置
+
+---
+
 ## 🎯 应用场景
 
-![项目概览](./doc/screenshot_20260122_205031.png)
+![首页](./doc/screenshot_20260203_203942.png)
 
 ### 创作流程
 
@@ -46,9 +55,9 @@ openOii 是一个基于 AI Agent 的智能漫剧生成平台，通过多智能�
 4. **精细调整** - 对不满意的内容进行重新生成
 5. **导出作品** - 获取完整的视频作品
 
-![角色展示](./doc/screenshot_20260122_205049.png)
+![无限画布](./doc/screenshot_20260203_203917.png)
 
-![分镜展示](./doc/screenshot_20260122_205128.png)
+![配置管理](./doc/screenshot_20260203_203930.png)
 
 ---
 
@@ -447,6 +456,7 @@ chore: 构建/工具链相关
 - [Claude Agent SDK](https://github.com/anthropics/anthropic-sdk-python) - AI 智能体开发
 - [Tailwind CSS](https://tailwindcss.com/) - 实用优先的 CSS 框架
 - [DaisyUI](https://daisyui.com/) - Tailwind CSS 组件库
+- [Linux.do](https://linux.do/) - 强烈推荐！高质量技术社区，感谢佬友们的公益站和热心支持 ❤️
 
 ---
 

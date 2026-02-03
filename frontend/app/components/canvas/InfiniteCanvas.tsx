@@ -279,6 +279,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
         editor.updateShape({
           id: shape.id,
           type: shape.type,
+          x: shape.x,
+          y: shape.y,
           props: shape.props,
         } as any);
       } else {

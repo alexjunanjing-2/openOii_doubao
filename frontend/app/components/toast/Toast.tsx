@@ -29,9 +29,9 @@ export function Toast({ toast }: ToastProps) {
   return (
     <div
       className={`
-        relative min-w-[320px] max-w-[480px] p-4 bg-white
-        border-4 border-black border-l-8 ${typeStyles[toast.type]}
-        shadow-[8px_8px_0_rgba(0,0,0,0.2)]
+        relative min-w-[320px] max-w-[480px] p-4 bg-base-100
+        border-4 border-base-content/80 border-l-8 ${typeStyles[toast.type]}
+        shadow-brutal
         transform -rotate-[0.5deg]
         animate-slide-in-right
       `}
@@ -61,7 +61,7 @@ export function Toast({ toast }: ToastProps) {
                 action.onClick();
                 removeToast(toast.id);
               }}
-              className={`btn btn-xs border-2 border-black ${
+              className={`btn btn-xs border-2 border-base-content/50 ${
                 action.variant === "primary"
                   ? "btn-primary"
                   : "btn-ghost hover:bg-base-200"

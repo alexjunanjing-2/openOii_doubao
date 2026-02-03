@@ -31,16 +31,20 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
     };
   }
 
-  override canSelect() {
-    return false;
-  }
-
   override canEdit() {
     return false;
   }
 
   override canResize() {
     return false;
+  }
+
+  override hideSelectionBoundsFg() {
+    return true;
+  }
+
+  override hideSelectionBoundsBg() {
+    return true;
   }
 
   getGeometry(shape: ScriptSectionShape): Geometry2d {
@@ -58,8 +62,10 @@ export class ScriptSectionShapeUtil extends ShapeUtil<ScriptSectionShape> {
       <HTMLContainer
         style={{
           width: shape.props.w,
+          height: shape.props.h,
           pointerEvents: "all",
         }}
+        className="h-full"
       >
         <ScriptSectionContent
           summary={summary}
@@ -85,7 +91,7 @@ function ScriptSectionContent({
   shots: Shot[];
 }) {
   return (
-    <div className="card-doodle bg-base-100 p-5">
+    <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">

@@ -35,16 +35,20 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
     };
   }
 
-  override canSelect() {
-    return false;
-  }
-
   override canEdit() {
     return false;
   }
 
   override canResize() {
     return false;
+  }
+
+  override hideSelectionBoundsFg() {
+    return true;
+  }
+
+  override hideSelectionBoundsBg() {
+    return true;
   }
 
   getGeometry(shape: CharacterSectionShape): Geometry2d {
@@ -62,8 +66,10 @@ export class CharacterSectionShapeUtil extends ShapeUtil<CharacterSectionShape> 
       <HTMLContainer
         style={{
           width: shape.props.w,
+          height: shape.props.h,
           pointerEvents: "all",
         }}
+        className="h-full"
       >
         <CharacterSectionContent characters={characters} />
       </HTMLContainer>
@@ -175,7 +181,7 @@ function CharacterCard({ character }: { character: Character }) {
 
 function CharacterSectionContent({ characters }: { characters: Character[] }) {
   return (
-    <div className="card-doodle bg-base-100 p-5">
+    <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-full bg-warning/20 flex items-center justify-center">

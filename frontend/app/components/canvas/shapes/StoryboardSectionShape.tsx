@@ -36,16 +36,20 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
     };
   }
 
-  override canSelect() {
-    return false;
-  }
-
   override canEdit() {
     return false;
   }
 
   override canResize() {
     return false;
+  }
+
+  override hideSelectionBoundsFg() {
+    return true;
+  }
+
+  override hideSelectionBoundsBg() {
+    return true;
   }
 
   getGeometry(shape: StoryboardSectionShape): Geometry2d {
@@ -63,8 +67,10 @@ export class StoryboardSectionShapeUtil extends ShapeUtil<StoryboardSectionShape
       <HTMLContainer
         style={{
           width: shape.props.w,
+          height: shape.props.h,
           pointerEvents: "all",
         }}
+        className="h-full"
       >
         <StoryboardSectionContent shots={shots} />
       </HTMLContainer>
@@ -218,7 +224,7 @@ function StoryboardSectionContent({ shots }: { shots: Shot[] }) {
   const sortedShots = [...shots].sort((a, b) => a.order - b.order);
 
   return (
-    <div className="card-doodle bg-base-100 p-5">
+    <div className="card-doodle bg-base-100 p-5 h-full">
       {/* 标题栏 */}
       <div className="flex items-center gap-2 mb-4">
         <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
