@@ -3,6 +3,7 @@
 <div align="center">
 
 **基于多智能体协作的漫剧创作平台，让创意变成现实**
+**⭐ 如果这个项目对你有帮助，请给个 Star 支持一下！⭐**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
