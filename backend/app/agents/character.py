@@ -14,13 +14,23 @@ class CharacterAgent(BaseAgent):
     name = "character"
 
     def _character_to_description(self, item: dict) -> str:
+        name = item.get("name", "")
         design_intent = item.get("design_intent")
         if isinstance(design_intent, str) and design_intent.strip():
-            return design_intent.strip()
+            desc = design_intent.strip()
+            if isinstance(name, str) and name.strip():
+                return f"{name.strip()}，{desc}"
+            return desc
         visual_design = item.get("visual_design")
         if isinstance(visual_design, dict) and visual_design:
-            return json.dumps(visual_design, ensure_ascii=False)
-        return json.dumps(item, ensure_ascii=False)
+            desc = json.dumps(visual_design, ensure_ascii=False)
+            if isinstance(name, str) and name.strip():
+                return f"{name.strip()}，{desc}"
+            return desc
+        desc = json.dumps(item, ensure_ascii=False)
+        if isinstance(name, str) and name.strip():
+            return f"{name.strip()}，{desc}"
+        return desc
 
     def _build_image_prompt(self, item: dict) -> str:
         prompt = item.get("reference_image_prompt") or {}
@@ -59,6 +69,7 @@ class CharacterAgent(BaseAgent):
                 },
                 "shots": [{"order": s.order, "description": s.description} for s in shots],
                 "existing_characters": [],
+                "style_mode": ctx.style_mode,
             },
             ensure_ascii=False,
         )

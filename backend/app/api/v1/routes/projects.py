@@ -132,6 +132,7 @@ async def delete_project(project_id: int, session: AsyncSession = SessionDep):
         .where(AgentRun.status.in_(["queued", "running"]))
         .values(status="cancelled")
     )
+    await session.commit()
 
     # 1. 删除所有关联文件
     await _delete_project_files(session, project, project_id)
@@ -168,14 +169,20 @@ async def list_shots(project_id: int, session: AsyncSession = SessionDep):
 
 
 @router.get("/{project_id}/messages", response_model=list[MessageRead])
-async def list_messages(project_id: int, session: AsyncSession = SessionDep):
-    """获取项目的所有消息记录"""
+async def list_messages(
+    project_id: int,
+    session: AsyncSession = SessionDep,
+    style_mode: str | None = None,
+):
+    """获取项目的所有消息记录，可按 style_mode 过滤"""
     project = await session.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    res = await session.execute(
-        select(Message)
-        .where(Message.project_id == project_id)
-        .order_by(Message.created_at.asc())
-    )
+    
+    query = select(Message).where(Message.project_id == project_id)
+    if style_mode:
+        query = query.where(Message.style_mode == style_mode)
+    query = query.order_by(Message.created_at.asc())
+    
+    res = await session.execute(query)
     return [MessageRead.model_validate(m) for m in res.scalars().all()]

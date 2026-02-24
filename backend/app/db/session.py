@@ -3,8 +3,9 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 
 import asyncio
-from sqlalchemy import func, update
+from sqlalchemy import func, update, event
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 from sqlmodel import SQLModel
 
 from app.config import get_settings
@@ -31,7 +32,41 @@ _patch_aiosqlite_event_loop()
 
 def _build_engine() -> AsyncEngine:
     settings = get_settings()
-    return create_async_engine(settings.database_url, echo=settings.db_echo, pool_pre_ping=True)
+    connect_args = {}
+    poolclass = None
+    
+    # SQLite 特定配置：使用 NullPool 避免连接池限制
+    if settings.database_url.startswith("sqlite"):
+        connect_args = {
+            "check_same_thread": False,
+            "timeout": 60,  # Increase timeout to reduce lock errors
+        }
+        poolclass = NullPool
+    
+    engine_kwargs = {
+        "echo": settings.db_echo,
+        "pool_pre_ping": True,
+        "connect_args": connect_args,
+    }
+    
+    if poolclass:
+        engine_kwargs["poolclass"] = poolclass
+    else:
+        engine_kwargs["pool_size"] = 5
+        engine_kwargs["max_overflow"] = 10
+        engine_kwargs["pool_timeout"] = 30
+    
+    engine = create_async_engine(settings.database_url, **engine_kwargs)
+
+    # Enable WAL mode for SQLite
+    if settings.database_url.startswith("sqlite"):
+        @event.listens_for(engine.sync_engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.close()
+
+    return engine
 
 
 engine: AsyncEngine = _build_engine()

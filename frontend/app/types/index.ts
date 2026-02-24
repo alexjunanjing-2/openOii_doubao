@@ -40,6 +40,7 @@ export interface AgentRun {
   current_agent: string | null;
   progress: number;
   error: string | null;
+  style_mode: string;  // cartoon|realistic
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,7 @@ export type WsEventType =
   | "run_failed"
   | "run_awaiting_confirm"
   | "run_confirmed"
+  | "run_confirm_timeout"
   | "run_cancelled"
   | "agent_handoff"
   | "character_created"
@@ -93,6 +95,7 @@ export interface Message {
   content: string;
   progress: number | null;
   is_loading: boolean;
+  style_mode: string;  // cartoon|realistic
   created_at: string;
 }
 

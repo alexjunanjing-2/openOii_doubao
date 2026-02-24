@@ -153,7 +153,9 @@ async def create_character(args: dict[str, Any]) -> dict[str, Any]:
     await agent_state.session.commit()
     await agent_state.session.refresh(character)
 
-    return _tool_text(f"已创建角色 [{character.id}] {character.name}")
+    character_id = character.id
+    character_name = character.name
+    return _tool_text(f"已创建角色 [{character_id}] {character_name}")
 
 
 @tool("update_character", "更新角色信息", {"character_id": int, "name": str, "description": str})
@@ -276,7 +278,9 @@ async def create_shot(args: dict[str, Any]) -> dict[str, Any]:
     await agent_state.session.commit()
     await agent_state.session.refresh(shot)
 
-    return _tool_text(f"已创建分镜 [{shot.id}] 镜头 {shot.order}")
+    shot_id = shot.id
+    shot_order = shot.order
+    return _tool_text(f"已创建分镜 [{shot_id}] 镜头 {shot_order}")
 
 
 @tool("update_shot", "更新分镜信息", {

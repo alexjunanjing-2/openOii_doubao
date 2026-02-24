@@ -3,12 +3,24 @@ import type { Character, Shot } from "~/types";
 
 // Shape 类型常量
 export const SHAPE_TYPES = {
+  ORIGINAL_PROMPT: "original-prompt",
   SCRIPT_SECTION: "script-section",
   CHARACTER_SECTION: "character-section",
   STORYBOARD_SECTION: "storyboard-section",
   VIDEO_SECTION: "video-section",
   CONNECTOR: "connector",
 } as const;
+
+// 原始提示词区域 Shape
+export type OriginalPromptShape = TLBaseShape<
+  typeof SHAPE_TYPES.ORIGINAL_PROMPT,
+  {
+    w: number;
+    h: number;
+    story: string | null;
+    style: string | null;
+  }
+>;
 
 // 剧本区域 Shape (包含摘要、角色列表文字版、分镜描述)
 export type ScriptSectionShape = TLBaseShape<
@@ -65,6 +77,7 @@ export type ConnectorShape = TLBaseShape<
 // 扩展 tldraw 全局类型
 declare module "tldraw" {
   interface TLGlobalShapePropsMap {
+    [SHAPE_TYPES.ORIGINAL_PROMPT]: OriginalPromptShape["props"];
     [SHAPE_TYPES.SCRIPT_SECTION]: ScriptSectionShape["props"];
     [SHAPE_TYPES.CHARACTER_SECTION]: CharacterSectionShape["props"];
     [SHAPE_TYPES.STORYBOARD_SECTION]: StoryboardSectionShape["props"];

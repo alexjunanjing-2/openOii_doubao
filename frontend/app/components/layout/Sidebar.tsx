@@ -8,6 +8,8 @@ import {
   SparklesIcon,
   SunIcon,
   TrashIcon,
+  BoltIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -17,12 +19,16 @@ import { projectsApi } from "~/services/api";
 import { useSettingsStore } from "~/stores/settingsStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
 import { useThemeStore } from "~/stores/themeStore";
+import { useStyleModeStore } from "~/stores/styleModeStore";
+import { useEditorStore } from "~/stores/editorStore";
 import type { Project } from "~/types";
 
 export function Sidebar() {
   const { isOpen, toggle } = useSidebarStore();
   const { theme, toggleTheme } = useThemeStore();
+  const { styleMode, toggleStyleMode } = useStyleModeStore();
   const { openModal: openSettingsModal } = useSettingsStore();
+  const { autoMode, setAutoMode } = useEditorStore();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -77,6 +83,55 @@ export function Sidebar() {
 
   return (
     <>
+      {/* 主题切换按钮 - 固定在右上角 */}
+      <button
+        onClick={toggleTheme}
+        className={`fixed top-4 right-4 z-50 p-2 rounded-lg transition-all duration-200 cursor-pointer ${
+          styleMode === "realistic"
+            ? "bg-base-200 border border-base-300 shadow-cinematic-sm hover:shadow-cinematic"
+            : "bg-base-100 border-3 border-black shadow-brutal hover:shadow-brutal-lg hover:-translate-x-0.5 hover:-translate-y-0.5"
+        }`}
+        title={
+          styleMode === "realistic"
+            ? (theme === "cinematic" ? "切换到浅色模式" : "切换到深色模式")
+            : (theme === "doodle" ? "切换到深色模式" : "切换到浅色模式")
+        }
+        aria-label={
+          styleMode === "realistic"
+            ? (theme === "cinematic" ? "切换到浅色模式" : "切换到深色模式")
+            : (theme === "doodle" ? "切换到深色模式" : "切换到浅色模式")
+        }
+      >
+        {styleMode === "realistic" ? (
+          theme === "cinematic" ? (
+            <SunIcon className="w-4 h-4" />
+          ) : (
+            <MoonIcon className="w-4 h-4" />
+          )
+        ) : theme === "doodle" ? (
+          <MoonIcon className="w-4 h-4" />
+        ) : (
+          <SunIcon className="w-4 h-4 text-warning" />
+        )}
+      </button>
+
+      {/* 真人模式切换按钮 - 固定在右上角，主题按钮下方 */}
+      <button
+        onClick={toggleStyleMode}
+        className={`fixed top-16 right-4 z-50 px-3 py-2 rounded-lg border-2 transition-all duration-200 cursor-pointer flex items-center gap-2 ${
+          styleMode === "realistic"
+            ? "bg-gradient-to-r from-primary to-secondary text-white border-transparent shadow-cinematic-glow"
+            : "bg-base-100 border-black shadow-brutal hover:shadow-brutal-lg hover:-translate-x-0.5 hover:-translate-y-0.5"
+        }`}
+        title={styleMode === "cartoon" ? "切换到真人模式" : "切换到卡通模式"}
+        aria-label={styleMode === "cartoon" ? "切换到真人模式" : "切换到卡通模式"}
+      >
+        <UserIcon className="w-4 h-4" />
+        <span className="text-sm font-medium">
+          {styleMode === "cartoon" ? "切换到真人模式" : "切换到卡通模式"}
+        </span>
+      </button>
+
       {/* 收起状态下的展开按钮 */}
       {!isOpen && (
         <button
@@ -191,22 +246,20 @@ export function Sidebar() {
             <span className="font-medium text-sm">系统设置</span>
           </button>
 
-          {/* 主题切换 */}
+          {/* 自动模式切换 */}
           <div className="flex items-center justify-between px-2">
-            <span className="text-xs text-base-content/60 font-medium">主题模式</span>
+            <span className="text-xs text-base-content/60 font-medium">自动模式</span>
             <button
-              onClick={toggleTheme}
-              className="p-2.5 bg-base-200 hover:bg-base-300 border-2 border-base-content/20 rounded-lg transition-all duration-200 cursor-pointer"
-              title={theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"}
-              aria-label={
-                theme === "doodle" ? "切换到深色模式" : "切换到浅色模式"
-              }
+              onClick={() => setAutoMode(!autoMode)}
+              className={`p-2.5 border-2 rounded-lg transition-all duration-200 cursor-pointer ${
+                autoMode
+                  ? "bg-primary text-primary-content border-primary"
+                  : "bg-base-200 hover:bg-base-300 border-base-content/20"
+              }`}
+              title={autoMode ? "关闭自动模式" : "开启自动模式"}
+              aria-label={autoMode ? "关闭自动模式" : "开启自动模式"}
             >
-              {theme === "doodle" ? (
-                <MoonIcon className="w-5 h-5" />
-              ) : (
-                <SunIcon className="w-5 h-5 text-warning" />
-              )}
+              <BoltIcon className={`w-5 h-5 ${autoMode ? "animate-pulse" : ""}`} />
             </button>
           </div>
 

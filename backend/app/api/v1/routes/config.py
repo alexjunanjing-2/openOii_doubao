@@ -91,22 +91,20 @@ async def test_connection(payload: TestConnectionRequest):
 async def _test_llm_connection(settings) -> TestConnectionResponse:
     """测试 LLM 服务连接（使用实际服务类）"""
     try:
-        from app.services.llm import LLMService
+        from app.services.llm import create_llm_service
 
-        # 实例化服务
-        service = LLMService(settings, max_retries=0)
+        service = create_llm_service(settings, max_retries=0)
 
-        # 尝试发送最小请求
         try:
             await service.generate(
                 messages=[{"role": "user", "content": "test"}],
                 max_tokens=1
             )
-            # 成功
+            model_name = settings.doubao_llm_model if settings.llm_provider == "doubao" else settings.anthropic_model
             return TestConnectionResponse(
                 success=True,
                 message="LLM 服务连接成功",
-                details=f"模型: {settings.anthropic_model}"
+                details=f"模型: {model_name}"
             )
         except Exception as e:
             # 检查是否是认证错误

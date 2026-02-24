@@ -24,7 +24,7 @@ from app.schemas.project import (
 )
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
-from app.services.llm import LLMService
+from app.services.llm import LLMService, create_llm_service
 from app.services.task_manager import task_manager
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
@@ -67,9 +67,10 @@ async def _run_agent_plan(
                 ws=ws,
                 project=project,
                 run=run,
-                llm=LLMService(settings),
+                llm=create_llm_service(settings),
                 image=ImageService(settings),
                 video=create_video_service(settings),
+                style_mode=run.style_mode,
             )
 
             await ws.send_event(
@@ -216,8 +217,9 @@ async def regenerate_character(
         current_agent=getattr(agent_plan[0], "name", None),
         progress=0.0,
         error=None,
-        resource_type="character",  # 设置资源类型
-        resource_id=character_id,   # 设置资源 ID
+        resource_type="character",
+        resource_id=character_id,
+        style_mode=payload.style_mode,
     )
     session.add(run)
     await session.commit()

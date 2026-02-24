@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -18,6 +19,7 @@ from app.services.task_manager import task_manager
 from app.ws.manager import ConnectionManager
 
 router = APIRouter(prefix="/projects")
+logger = logging.getLogger(__name__)
 
 
 @router.post("/{project_id}/generate", response_model=AgentRunRead, status_code=status.HTTP_201_CREATED)
@@ -28,22 +30,38 @@ async def generate_project(
     settings: Settings = SettingsDep,
     ws: ConnectionManager = WsManagerDep,
 ):
+    logger.info(f"[DEBUG] generate_project called with project_id={project_id}, payload={payload}")
     project = await session.get(Project, project_id)
     if not project:
+        logger.error(f"[DEBUG] Project not found for project_id={project_id}")
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # 并发限制已移除，允许多个任务同时运行
-    run = AgentRun(project_id=project_id, status="running", current_agent="orchestrator", progress=0.0)
+    logger.info(f"[DEBUG] Project found: id={project.id}, title={project.title}, story={project.story[:100] if project.story else None}")
+
+    run = AgentRun(
+        project_id=project_id,
+        status="running",
+        current_agent="orchestrator",
+        progress=0.0,
+        style_mode=payload.style_mode,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
 
+    logger.info(f"[DEBUG] AgentRun created: id={run.id}, status={run.status}, current_agent={run.current_agent}")
+
     async def _task() -> None:
         try:
+            logger.info(f"[DEBUG] _task started for run_id={run.id}, project_id={project_id}")
             async with async_session_maker() as task_session:
+                logger.info(f"[DEBUG] Creating GenerationOrchestrator")
                 orchestrator = GenerationOrchestrator(settings=settings, ws=ws, session=task_session)
-                await orchestrator.run(project_id=project_id, run_id=run.id, request=payload)
+                logger.info(f"[DEBUG] Calling orchestrator.run")
+                await orchestrator.run(project_id=project_id, run_id=run.id, request=payload, auto_mode=payload.auto_mode)
+                logger.info(f"[DEBUG] orchestrator.run completed successfully")
         except asyncio.CancelledError:
+            logger.warning(f"[DEBUG] Task cancelled for run_id={run.id}")
             # 任务被取消，更新数据库状态
             async with async_session_maker() as cancel_session:
                 run_obj = await cancel_session.get(AgentRun, run.id)
@@ -51,7 +69,11 @@ async def generate_project(
                     run_obj.status = "cancelled"
                     await cancel_session.commit()
             raise
+        except Exception as e:
+            logger.error(f"[DEBUG] Task failed for run_id={run.id}: {str(e)}", exc_info=True)
+            raise
         finally:
+            logger.info(f"[DEBUG] Task finished for run_id={run.id}")
             task_manager.remove(project_id)
 
     task = asyncio.create_task(_task())
@@ -112,8 +134,13 @@ async def feedback_project(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    # 并发限制已移除，允许多个任务同时运行
-    run = AgentRun(project_id=project_id, status="queued", current_agent="review", progress=0.0)
+    run = AgentRun(
+        project_id=project_id,
+        status="queued",
+        current_agent="review",
+        progress=0.0,
+        style_mode=payload.style_mode,
+    )
     session.add(run)
     await session.commit()
     await session.refresh(run)
@@ -122,7 +149,6 @@ async def feedback_project(
     session.add(msg)
     await session.commit()
 
-    # 同步写入聊天消息表，方便前端展示反馈内容
     session.add(
         Message(
             project_id=project_id,
@@ -130,6 +156,7 @@ async def feedback_project(
             agent="user",
             role="user",
             content=payload.content,
+            style_mode=payload.style_mode,
         )
     )
     await session.commit()
@@ -141,12 +168,11 @@ async def feedback_project(
                 await orchestrator.run_from_agent(
                     project_id=project_id,
                     run_id=run.id,
-                    request=GenerateRequest(notes=payload.content),
+                    request=GenerateRequest(notes=payload.content, style_mode=payload.style_mode),
                     agent_name="review",
                     auto_mode=False,
                 )
         except asyncio.CancelledError:
-            # 任务被取消，更新数据库状态
             async with async_session_maker() as cancel_session:
                 run_obj = await cancel_session.get(AgentRun, run.id)
                 if run_obj and run_obj.status not in ("cancelled", "failed", "succeeded"):

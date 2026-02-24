@@ -29,7 +29,7 @@ export function StageView({ projectId }: StageViewProps) {
             构思你的故事
           </h2>
           <p className="text-base-content/70 mb-6">
-            在左侧对话框中描述你的故事想法，AI 将帮你创作剧本、设计角色和规划分镜。
+            在左侧对话框中描述你的故事想法，AI将帮你创作剧本、设计角色和规划分镜。
           </p>
 
           {/* 引导箭头指向左侧 */}
@@ -37,7 +37,7 @@ export function StageView({ projectId }: StageViewProps) {
             <svg className="w-6 h-6 animate-bounce-x" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            <span className="text-sm">点击左侧「开始生成」按钮</span>
+            <span className="text-sm">点击左侧「满意，继续下一步」按钮</span>
           </div>
         </div>
       </div>

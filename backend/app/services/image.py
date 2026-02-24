@@ -188,23 +188,34 @@ class ImageService:
 
         timeout = httpx.Timeout(300.0, connect=30.0)
 
+        print(f"[ImageService] 开始 ModelScope 图片生成")
+        print(f"[ImageService] API地址: {base_url}/v1/images/generations")
+        print(f"[ImageService] Headers: {headers}")
+
         async with httpx.AsyncClient(timeout=timeout) as client:
             # 1. 提交生成任务
             payload = {
                 "model": self.settings.image_model,
                 "prompt": prompt,
+                "watermark": False,
             }
+
+            print(f"[ImageService] 请求Body: {json.dumps(payload, ensure_ascii=False)}")
 
             res = await client.post(
                 f"{base_url}/v1/images/generations",
                 headers=headers,
                 json=payload,
             )
+            print(f"[ImageService] 提交任务响应状态码: {res.status_code}")
+            print(f"[ImageService] 提交任务响应内容: {res.text}")
             res.raise_for_status()
             task_id = res.json().get("task_id")
 
             if not task_id:
                 raise RuntimeError(f"ModelScope API did not return task_id: {res.json()}")
+
+            print(f"[ImageService] 任务ID: {task_id}")
 
             # 2. 轮询任务状态
             poll_headers = {
@@ -214,7 +225,7 @@ class ImageService:
             }
 
             max_polls = 60  # 最多轮询 60 次（5分钟）
-            for _ in range(max_polls):
+            for poll_count in range(max_polls):
                 result = await client.get(
                     f"{base_url}/v1/tasks/{task_id}",
                     headers=poll_headers,
@@ -223,60 +234,88 @@ class ImageService:
                 data = result.json()
 
                 status = data.get("task_status")
+                print(f"[ImageService] 轮询 {poll_count + 1}/{max_polls}: 任务状态 {status}")
+                
                 if status == "SUCCEED":
                     output_images = data.get("output_images", [])
                     if output_images:
+                        print(f"[ImageService] 图片生成成功: {output_images[0]}")
                         return output_images[0]
                     raise RuntimeError(f"ModelScope task succeeded but no images: {data}")
                 elif status == "FAILED":
+                    print(f"[ImageService] ModelScope 图片生成失败: {data}")
                     raise RuntimeError(f"ModelScope image generation failed: {data}")
 
                 # 等待 5 秒后继续轮询
                 await asyncio.sleep(5)
 
+            print(f"[ImageService] ModelScope 任务超时")
             raise RuntimeError(f"ModelScope task timeout after {max_polls * 5} seconds")
 
     async def _post_json_with_retry(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         delay_s = 0.5
         last_exc: Exception | None = None
+        headers = self.settings.image_headers()
+
+        print(f"[ImageService] 开始图片生成请求")
+        print(f"[ImageService] API地址: {url}")
+        print(f"[ImageService] Headers: {headers}")
+        print(f"[ImageService] Body: {json.dumps(payload, ensure_ascii=False)}")
 
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_s) as client:
             for attempt in range(self.max_retries + 1):
                 try:
-                    res = await client.post(url, headers=self.settings.image_headers(), json=payload)
+                    print(f"[ImageService] 第 {attempt + 1} 次尝试发送请求")
+                    res = await client.post(url, headers=headers, json=payload)
+                    print(f"[ImageService] 响应状态码: {res.status_code}")
                     if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                        print(f"[ImageService] 状态码 {res.status_code} 可重试，等待 {delay_s} 秒后重试")
                         await asyncio.sleep(delay_s)
                         delay_s = min(delay_s * 2, 8.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    result = res.json()
+                    print(f"[ImageService] 请求成功，响应数据: {json.dumps(result, ensure_ascii=False)}")
+                    return result
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
+                    print(f"[ImageService] 请求失败: {type(exc).__name__}: {exc}")
                     if attempt >= self.max_retries:
                         break
                     status = getattr(getattr(exc, "response", None), "status_code", None)
+                    print(f"[ImageService] 响应状态码: {status}")
                     if isinstance(status, int) and not self._is_retryable_status(status):
                         break
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
+        print(f"[ImageService] 图片生成请求失败，已重试 {self.max_retries} 次，最终错误: {last_exc}")
         raise RuntimeError(f"Image generation request failed after retries: {last_exc}") from last_exc
 
     async def _post_stream_with_retry(self, url: str, payload: dict[str, Any]) -> str:
         """流式请求，收集所有 chunk 并提取最终 URL"""
         delay_s = 0.5
         last_exc: Exception | None = None
+        headers = self.settings.image_headers()
+
+        print(f"[ImageService] 开始流式图片生成请求")
+        print(f"[ImageService] API地址: {url}")
+        print(f"[ImageService] Headers: {headers}")
+        print(f"[ImageService] Body: {json.dumps(payload, ensure_ascii=False)}")
 
         timeout = httpx.Timeout(300.0, connect=30.0)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(self.max_retries + 1):
                 try:
+                    print(f"[ImageService] 第 {attempt + 1} 次尝试发送流式请求")
                     collected_content = ""
                     async with client.stream(
-                        "POST", url, headers=self.settings.image_headers(), json=payload
+                        "POST", url, headers=headers, json=payload
                     ) as res:
+                        print(f"[ImageService] 流式响应状态码: {res.status_code}")
                         if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                            print(f"[ImageService] 状态码 {res.status_code} 可重试，等待 {delay_s} 秒后重试")
                             await asyncio.sleep(delay_s)
                             delay_s = min(delay_s * 2, 8.0)
                             continue
@@ -291,6 +330,7 @@ class ImageService:
                             try:
                                 chunk = json.loads(data_str)
                                 if "error" in chunk:
+                                    print(f"[ImageService] 流式响应错误: {chunk['error']}")
                                     raise RuntimeError(f"Stream error: {chunk['error']}")
                                 choices = chunk.get("choices", [])
                                 if choices:
@@ -306,6 +346,7 @@ class ImageService:
                                 if "error" in data_str:
                                     try:
                                         err = json.loads(data_str)
+                                        print(f"[ImageService] 流式响应错误: {err}")
                                         raise RuntimeError(f"Stream error: {err}")
                                     except json.JSONDecodeError:
                                         logger.debug("Non-JSON error line in stream: %s", data_str[:100])
@@ -313,18 +354,22 @@ class ImageService:
                                     logger.debug("Skipping non-JSON line in image stream: %s", e)
                                 continue
 
+                    print(f"[ImageService] 流式请求成功，收集到的内容: {collected_content}")
                     return collected_content
 
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
+                    print(f"[ImageService] 流式请求失败: {type(exc).__name__}: {exc}")
                     if attempt >= self.max_retries:
                         break
                     status = getattr(getattr(exc, "response", None), "status_code", None)
+                    print(f"[ImageService] 响应状态码: {status}")
                     if isinstance(status, int) and not self._is_retryable_status(status):
                         break
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
+        print(f"[ImageService] 流式图片生成请求失败，已重试 {self.max_retries} 次，最终错误: {last_exc}")
         raise RuntimeError(f"Image generation stream failed after retries: {last_exc}") from last_exc
 
     async def generate(
@@ -332,7 +377,6 @@ class ImageService:
         *,
         prompt: str,
         size: str = "1024x1024",
-        n: int = 1,
         style: str | None = None,
         response_format: str = "url",
         stream: bool = False,
@@ -345,15 +389,15 @@ class ImageService:
                 "model": self.settings.image_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": stream,
+                "watermark": False,
                 **kwargs,
             }
         else:
             payload: dict[str, Any] = {
                 "model": self.settings.image_model,
                 "prompt": prompt,
-                "size": size,
-                "n": n,
-                "response_format": response_format,
+                "size": self.settings.storyboard_image_size,
+                "watermark": False,
                 **kwargs,
             }
             if style:
@@ -366,41 +410,57 @@ class ImageService:
         *,
         prompt: str,
         size: str = "1024x1024",
-        image_bytes: bytes | None = None,
+        image_urls: list[str] | None = None,
         **kwargs: Any,
     ) -> str:
         # ModelScope API（异步轮询模式）
         if self._is_modelscope_api():
-            if image_bytes is not None:
+            if image_urls:
                 logger.info(
-                    "I2I reference image provided but ModelScope backend does not support it; falling back to text-to-image"
+                    "Image URLs provided but ModelScope backend does not support it; falling back to text-to-image"
                 )
             return await self._modelscope_generate(prompt)
 
         url = self._build_url()
 
         # 图生图（I2I）：仅在启用开关且提供参考图时尝试
-        if image_bytes is not None and self.settings.use_i2i():
+        print(f"[ImageService] image_urls: {image_urls}")
+        print(f"[ImageService] use_i2i(): {self.settings.use_i2i()}")
+        print(f"[ImageService] enable_image_to_image: {self.settings.enable_image_to_image}")
+        if image_urls and self.settings.use_i2i():
             try:
-                image_base64 = base64.b64encode(image_bytes).decode("utf-8")
-
                 # Chat Completions 风格（多模态）
                 if "/chat/completions" in self.settings.image_endpoint:
+                    content_list = [{"type": "text", "text": prompt}]
+                    for img_url in image_urls:
+                        if img_url.startswith(("http://", "https://")):
+                            content_list.append({
+                                "type": "image_url",
+                                "image_url": {"url": img_url},
+                            })
+                        elif img_url.startswith("/static/"):
+                            public_url = self.settings.build_public_url(img_url)
+                            if public_url:
+                                content_list.append({
+                                    "type": "image_url",
+                                    "image_url": {"url": public_url},
+                                })
+                            else:
+                                content_list.append({
+                                    "type": "image_url",
+                                    "image_url": {"url": img_url},
+                                })
+
                     payload: dict[str, Any] = {
                         "model": self.settings.image_model,
                         "messages": [
                             {
                                 "role": "user",
-                                "content": [
-                                    {"type": "text", "text": prompt},
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-                                    },
-                                ],
+                                "content": content_list,
                             }
                         ],
                         "stream": True,
+                        "watermark": False,
                         **kwargs,
                     }
                     content = await self._post_stream_with_retry(url, payload)
@@ -411,13 +471,21 @@ class ImageService:
                     raise RuntimeError(f"Image API stream response missing URL: {content}")
                 else:
                     # 标准图片生成接口（图生图）
+                    # 直接传递图片 URL 列表
+                    public_image_urls = []
+                    for img_url in image_urls:
+                        if img_url.startswith("/static/"):
+                            public_url = self.settings.build_public_url(img_url)
+                            public_image_urls.append(public_url if public_url else img_url)
+                        else:
+                            public_image_urls.append(img_url)
+
                     payload = {
                         "model": self.settings.image_model,
                         "prompt": prompt,
-                        "size": size,
-                        "n": 1,
-                        "response_format": "url",
-                        "image": image_base64,
+                        "size": "2K",
+                        "image": public_image_urls,
+                        "watermark": False,
                         **kwargs,
                     }
                     data = await self._post_json_with_retry(url, payload)
@@ -444,6 +512,7 @@ class ImageService:
                 "model": self.settings.image_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "stream": True,
+                "watermark": False,
                 **kwargs,
             }
             content = await self._post_stream_with_retry(url, payload)

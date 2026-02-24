@@ -77,11 +77,14 @@ class CharacterUpdate(BaseModel):
 
 class RegenerateRequest(BaseModel):
     type: Literal["image", "video"]
+    style_mode: Literal["cartoon", "realistic"] = "cartoon"
 
 
 class GenerateRequest(BaseModel):
     seed: int | None = None
     notes: str | None = None
+    auto_mode: bool = False
+    style_mode: Literal["cartoon", "realistic"] = "cartoon"
 
 
 class AgentRunRead(BaseModel):
@@ -95,6 +98,7 @@ class AgentRunRead(BaseModel):
     error: str | None
     resource_type: str | None  # 资源类型：character|shot|project
     resource_id: int | None    # 资源 ID
+    style_mode: str  # cartoon|realistic
     created_at: datetime
     updated_at: datetime
 
@@ -102,6 +106,7 @@ class AgentRunRead(BaseModel):
 class FeedbackRequest(BaseModel):
     content: str = Field(min_length=1)
     run_id: int | None = None
+    style_mode: Literal["cartoon", "realistic"] = "cartoon"
 
 
 class MessageRead(BaseModel):
@@ -115,4 +120,5 @@ class MessageRead(BaseModel):
     content: str
     progress: float | None
     is_loading: bool
+    style_mode: str  # cartoon|realistic
     created_at: datetime

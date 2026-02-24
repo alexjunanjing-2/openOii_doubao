@@ -19,4 +19,5 @@ class Message(SQLModel, table=True):
     content: str  # 消息内容
     progress: Optional[float] = None  # 进度值（0-1）
     is_loading: bool = Field(default=False)  # 是否显示加载动画
+    style_mode: str = Field(default="cartoon", index=True)  # cartoon|realistic
     created_at: datetime = Field(default_factory=utcnow)

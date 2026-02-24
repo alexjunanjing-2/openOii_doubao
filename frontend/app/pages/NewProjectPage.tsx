@@ -107,7 +107,7 @@ export function NewProjectPage() {
               />
               <div className="form-control">
                 <label className="label">
-                  <span className="label-text">故事内容</span>
+                  <span className="label-text">用户输入</span>
                 </label>
                 <textarea
                   className="textarea textarea-bordered bg-base-200 h-48"

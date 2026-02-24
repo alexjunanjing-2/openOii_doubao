@@ -50,6 +50,30 @@ class Settings(BaseSettings):
     )
 
     # ============================================
+    # 豆包 LLM 服务（火山引擎 Ark API）
+    # ============================================
+    DOUBAO_API_KEY: str | None = Field(
+        default=None,
+        description="豆包 LLM API Key（火山引擎 ARK_API_KEY）",
+    )
+    doubao_llm_base_url: str = Field(
+        default="https://ark.cn-beijing.volces.com/api/v3",
+        description="豆包 LLM API 基础地址",
+    )
+    doubao_llm_model: str = Field(
+        default="doubao-pro-32k",
+        description="豆包 LLM 模型 ID",
+    )
+    doubao_llm_endpoint: str = Field(
+        default="/chat/completions",
+        description="豆包 LLM API 端点路径",
+    )
+    llm_provider: str = Field(
+        default="anthropic",
+        description="LLM 服务提供商：anthropic 或 doubao",
+    )
+
+    # ============================================
     # 图像生成服务 (OpenAI 兼容接口)
     # ============================================
     image_base_url: str = Field(
@@ -68,6 +92,14 @@ class Settings(BaseSettings):
     enable_image_to_image: bool = Field(
         default=False,
         description="是否启用图生图（分镜首帧 I2I 参考图）",
+    )
+    storyboard_image_size: str = Field(
+        default="2560x1440",
+        description="分镜图生成尺寸（如 2560x1440, 4K 等）",
+    )
+    storyboard_use_character_reference: bool = Field(
+        default=False,
+        description="分镜图是否使用角色图作为参考（添加参考图说明到提示词）",
     )
 
     # ============================================
@@ -106,9 +138,13 @@ class Settings(BaseSettings):
         default="doubao-seedance-1-5-pro-251215",
         description="豆包视频生成模型 ID",
     )
+    doubao_video_fixed_duration: bool = Field(
+        default=True,
+        description="豆包视频是否使用固定时长（true=固定时长，false=模型自动选择）",
+    )
     doubao_video_duration: int = Field(
         default=5,
-        description="豆包视频时长（5 或 10 秒）",
+        description="豆包视频时长（固定模式下：4-12之间的整数秒；自动模式下：-1表示模型自动选择）",
     )
     doubao_video_ratio: str = Field(
         default="adaptive",
@@ -125,6 +161,10 @@ class Settings(BaseSettings):
     video_inline_local_images: bool = Field(
         default=True,
         description="图生视频时，未配置 PUBLIC_BASE_URL 则尝试内联本地图片为 data URL",
+    )
+    cache_generated_images: bool = Field(
+        default=False,
+        description="是否将图片生成服务返回的 URL 缓存到本地（true=缓存本地路径，false=保留原始 URL）",
     )
 
     # 视频服务提供商选择
@@ -152,7 +192,7 @@ class Settings(BaseSettings):
 
     def image_headers(self) -> dict[str, str]:
         """图像服务请求头"""
-        headers: dict[str, str] = {"User-Agent": self.app_name}
+        headers: dict[str, str] = {"Content-Type": "application/json"}
         if self.image_api_key:
             headers["Authorization"] = f"Bearer {self.image_api_key}"
         return headers

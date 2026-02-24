@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from datetime import datetime, UTC
 
 import redis.asyncio as redis
@@ -22,9 +24,11 @@ from app.models.project import Character, Project, Shot
 from app.schemas.project import GenerateRequest
 from app.services.file_cleaner import delete_file, delete_files
 from app.services.image import ImageService
-from app.services.llm import LLMService
+from app.services.llm import LLMResponse, LLMService, create_llm_service
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
+
+logger = logging.getLogger(__name__)
 
 
 # Agent 到工作流阶段的映射
@@ -358,12 +362,20 @@ class GenerationOrchestrator:
             },
         )
 
-        try:
-            ok = await wait_for_confirm_redis(run_id, timeout=1800)
-            if not ok:
-                raise asyncio.TimeoutError()
-        except asyncio.TimeoutError:
-            raise RuntimeError(f"等待确认超时（agent: {agent_name}）")
+        ok = await wait_for_confirm_redis(run_id, timeout=300)
+        if not ok:
+            await self.ws.send_event(
+                project_id,
+                {
+                    "type": "run_confirm_timeout",
+                    "data": {
+                        "run_id": run_id,
+                        "agent": agent_name,
+                        "message": f"⏰ 等待确认超时（agent: {agent_name}），自动继续下一步",
+                    },
+                },
+            )
+            return None
 
         await self.ws.send_event(
             project_id,
@@ -400,13 +412,19 @@ class GenerationOrchestrator:
         agent_name: str,
         auto_mode: bool = False,
     ) -> None:
+        logger.info(f"[DEBUG] run_from_agent started: project_id={project_id}, run_id={run_id}, agent_name={agent_name}, auto_mode={auto_mode}")
         project = await self.session.get(Project, project_id)
         run = await self.session.get(AgentRun, run_id)
         if not project or not run:
+            logger.error(f"[DEBUG] Project or Run not found: project={project is not None}, run={run is not None}")
             return
+
+        logger.info(f"[DEBUG] Project loaded: id={project.id}, title={project.title}, status={project.status}")
+        logger.info(f"[DEBUG] Run loaded: id={run.id}, status={run.status}, current_agent={run.current_agent}")
 
         try:
             self._agent_index(agent_name)
+            logger.info(f"[DEBUG] Agent index validated for agent_name={agent_name}")
 
             await self._set_run(
                 run, status="running", current_agent="orchestrator", progress=0.01, error=None
@@ -428,9 +446,10 @@ class GenerationOrchestrator:
                 ws=self.ws,
                 project=project,
                 run=run,
-                llm=LLMService(self.settings),
+                llm=create_llm_service(self.settings),
                 image=ImageService(self.settings),
                 video=create_video_service(self.settings),
+                style_mode=request.style_mode if request.style_mode else "cartoon",
             )
 
             # 初始化当前 run 已存在的用户反馈消息（避免后续确认不带反馈时误读历史反馈）
@@ -504,12 +523,14 @@ class GenerationOrchestrator:
 
             start_idx = self._agent_index(agent_name)
             plan = [a.name for a in self.agents[start_idx:] if a.name != "review"]
+            logger.info(f"[DEBUG] Execution plan: {plan}")
 
             i = 0
             while i < len(plan):
                 cur_name = plan[i]
                 cur_idx = self._agent_index(cur_name)
                 agent = self.agents[cur_idx]
+                logger.info(f"[DEBUG] Starting agent {i+1}/{len(plan)}: {cur_name}")
 
                 # 发送 Agent 邀请消息
                 prev_agent_name: str | None = None
@@ -546,7 +567,26 @@ class GenerationOrchestrator:
                     },
                 )
 
+                # 在运行 director 前，查询 onboarding 的输出
+                if cur_name == "director":
+                    res = await self.session.execute(
+                        select(AgentMessage)
+                        .where(AgentMessage.run_id == run_id)
+                        .where(AgentMessage.agent == "onboarding")
+                        .where(AgentMessage.role == "system")
+                        .order_by(AgentMessage.created_at.desc())
+                        .limit(1)
+                    )
+                    onboarding_msg = res.scalars().first()
+                    if onboarding_msg:
+                        try:
+                            ctx.onboarding_output = json.loads(onboarding_msg.content)
+                            logger.info(f"[DEBUG] Loaded onboarding_output for director")
+                        except json.JSONDecodeError:
+                            logger.warning(f"[DEBUG] Failed to parse onboarding_output")
+
                 await agent.run(ctx)
+                logger.info(f"[DEBUG] Agent {cur_name} completed successfully")
 
                 # 最后一个 agent 完成后，设置项目状态为 ready
                 if i == len(plan) - 1:
@@ -603,11 +643,13 @@ class GenerationOrchestrator:
 
                 i += 1
 
+            logger.info(f"[DEBUG] All agents completed successfully for project_id={project_id}")
             await self._set_run(run, status="succeeded", current_agent=None, progress=1.0)
             await self.ws.send_event(
                 project_id, {"type": "run_completed", "data": {"run_id": run_id}}
             )
         except Exception as e:
+            logger.error(f"[DEBUG] Exception in run_from_agent: {str(e)}", exc_info=True)
             # 先 rollback 以清理可能的脏状态
             await self.session.rollback()
             try:
@@ -621,11 +663,13 @@ class GenerationOrchestrator:
                 project_id, {"type": "run_failed", "data": {"run_id": run_id, "error": str(e)}}
             )
         finally:
+            logger.info(f"[DEBUG] run_from_agent finished for project_id={project_id}, run_id={run_id}")
             await clear_confirm_event_redis(run_id)
 
     async def run(
         self, *, project_id: int, run_id: int, request: GenerateRequest, auto_mode: bool = False
     ) -> None:
+        logger.info(f"[DEBUG] run called: project_id={project_id}, run_id={run_id}, auto_mode={auto_mode}")
         await self.run_from_agent(
             project_id=project_id,
             run_id=run_id,

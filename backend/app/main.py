@@ -123,9 +123,9 @@ def create_app() -> FastAPI:
                             project_id, {"type": "echo", "data": msg.get("data")}
                         )
                     elif msg_type == "confirm":
-                        # 用户确认继续执行
                         run_id = msg.get("data", {}).get("run_id")
                         feedback = msg.get("data", {}).get("feedback")
+                        style_mode = msg.get("data", {}).get("style_mode", "cartoon")
                         if run_id:
                             if isinstance(feedback, str) and feedback.strip():
                                 content = feedback.strip()
@@ -150,11 +150,10 @@ def create_app() -> FastAPI:
                                                 agent="user",
                                                 role="user",
                                                 content=content,
+                                                style_mode=style_mode,
                                             )
                                         )
                                         await session.commit()
-                                    # 确保 feedback 保存完成后再触发 confirm
-                                    # 添加短暂延迟让 orchestrator 的 session 能读取到新数据
                                     await asyncio.sleep(0.1)
                                 except Exception as e:
                                     logger.error(f"Failed to save feedback for run {run_id}: {e}")

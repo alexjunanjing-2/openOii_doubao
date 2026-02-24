@@ -17,6 +17,15 @@ class StoryboardAgent(BaseAgent):
         if not shots:
             return
 
+        # 获取默认时长
+        if ctx.settings.video_provider == "doubao":
+            if ctx.settings.doubao_video_fixed_duration:
+                default_duration = float(ctx.settings.doubao_video_duration)
+            else:
+                default_duration = -1
+        else:
+            default_duration = 5.0
+
         updated: list[Shot] = []
         for shot in shots:
             changed = False
@@ -27,7 +36,7 @@ class StoryboardAgent(BaseAgent):
                 shot.image_prompt = shot.description
                 changed = True
             if shot.duration is None:
-                shot.duration = 5.0
+                shot.duration = default_duration
                 changed = True
             if changed:
                 ctx.session.add(shot)

@@ -23,6 +23,7 @@ class AgentRun(SQLModel, table=True):
     # 资源级别锁：用于细粒度并发控制
     resource_type: Optional[str] = Field(default=None, index=True)  # character|shot|project
     resource_id: Optional[int] = Field(default=None, index=True)    # 对应资源的 ID
+    style_mode: str = Field(default="cartoon", index=True)  # cartoon|realistic
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

@@ -91,6 +91,7 @@ class ReviewAgent(BaseAgent):
         }
 
     async def run(self, ctx: AgentContext) -> dict[str, Any]:
+        print(f"[Review] 开始运行，项目ID: {ctx.project.id}")
         # 优先使用 ctx.user_feedback（orchestrator 已设置），DB 查询作为兜底
         feedback = ""
         if hasattr(ctx, "user_feedback") and ctx.user_feedback:
@@ -98,13 +99,18 @@ class ReviewAgent(BaseAgent):
         if not feedback:
             feedback = (await self._get_latest_feedback(ctx)).strip()
         if not feedback:
+            print(f"[Review] 未找到用户反馈内容")
             await self.send_message(ctx, "未找到用户反馈内容，将默认从编剧开始重新生成。")
             return {"start_agent": "scriptwriter", "reason": "未提供具体反馈"}
 
+        print(f"[Review] 获取用户反馈，长度: {len(feedback)}")
         state = await self._get_project_state(ctx)
+        print(f"[Review] 获取项目状态，角色数: {len(state['characters'])}, 分镜数: {len(state['shots'])}")
         user_prompt = json.dumps({"feedback": feedback, "state": state}, ensure_ascii=False)
 
+        print(f"[Review] 调用LLM分析反馈，max_tokens=2048")
         resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=2048)
+        print(f"[Review] LLM响应已收到，开始解析分析结果")
         data = extract_json(resp.text)
 
         analysis = data.get("analysis") if isinstance(data, dict) else None
@@ -151,6 +157,7 @@ class ReviewAgent(BaseAgent):
                 )
 
         if start_agent not in ALLOWED_START_AGENTS:
+            print(f"[Review] 路由结果 {start_agent} 不在允许列表中，使用默认路由")
             start_agent = _fallback_start_agent(feedback_type)
             if not reason:
                 reason = "未识别到有效的路由结果，采用默认路由策略"
@@ -168,7 +175,9 @@ class ReviewAgent(BaseAgent):
             if target_ids.shot_ids:
                 parts.append(f"{len(target_ids.shot_ids)} 个分镜")
             target_info = f"（仅处理 {', '.join(parts)}）"
+            print(f"[Review] 精细化控制目标：{target_info}")
 
+        print(f"[Review] 路由结果：start_agent={start_agent}, mode={mode}, reason={reason}")
         await self.send_message(ctx, f"{msg_summary}。将从 @{start_agent} 开始{mode_desc}{target_info}。{msg_reason}".strip())
 
         return {

@@ -18,6 +18,8 @@ const DEFAULT_CONFIG: LayoutConfig = {
 };
 
 interface UseCanvasLayoutProps {
+  story: string | null;
+  style: string | null;
   summary: string | null;
   characters: Character[];
   shots: Shot[];
@@ -27,6 +29,8 @@ interface UseCanvasLayoutProps {
 }
 
 export function useCanvasLayout({
+  story,
+  style,
   summary,
   characters,
   shots,
@@ -44,10 +48,30 @@ export function useCanvasLayout({
     let currentY = config.startY;
 
     // 计算各区域高度
+    const originalPromptHeight = calculateOriginalPromptHeight(story, style);
     const scriptHeight = calculateScriptHeight(summary, characters, shots);
     const characterHeight = calculateCharacterHeight(characters);
     const storyboardHeight = calculateStoryboardHeight(shots);
     const videoHeight = 450;
+
+    // 0. 原始提示词区域 (在编剧上方)
+    const hasOriginalPrompt = (story && story.trim()) || (style && style.trim() && style !== "anime");
+    if (hasOriginalPrompt) {
+      result.push({
+        id: "shape:original-prompt" as any,
+        type: SHAPE_TYPES.ORIGINAL_PROMPT,
+        x: config.startX,
+        y: currentY,
+        props: {
+          w: config.sectionWidth,
+          h: originalPromptHeight,
+          story: story || "",
+          style: style || "",
+        },
+      });
+
+      currentY += originalPromptHeight + config.sectionGap;
+    }
 
     // 1. 剧本区域 (编剧)
     const hasScriptContent = summary || characters.length > 0 || shots.length > 0;
@@ -65,6 +89,20 @@ export function useCanvasLayout({
           shots,
         },
       });
+
+      // 连接线: 原始提示词 -> 剧本
+      if (hasOriginalPrompt) {
+        result.push({
+          id: "shape:connector-0" as any,
+          type: SHAPE_TYPES.CONNECTOR,
+          x: 0,
+          y: 0,
+          props: {
+            fromId: "shape:original-prompt",
+            toId: "shape:script-section",
+          },
+        });
+      }
 
       currentY += scriptHeight + config.sectionGap;
     }
@@ -197,9 +235,28 @@ export function useCanvasLayout({
     }
 
     return result;
-  }, [summary, characters, shots, videoUrl, videoTitle, config]);
+  }, [story, style, summary, characters, shots, videoUrl, videoTitle, config]);
 
   return shapes;
+}
+
+// 计算原始提示词区域高度
+function calculateOriginalPromptHeight(story: string | null, style: string | null): number {
+  let height = 80; // 标题栏 + padding
+
+  if (story && story.trim()) {
+    // 故事内容：每60字符约一行，行高24px
+    const storyLines = Math.ceil(story.length / 60) + 1;
+    height += 40 + storyLines * 24 + 24;
+  }
+
+  if (style && style.trim() && style !== "anime") {
+    // 风格设定：每60字符约一行，行高24px
+    const styleLines = Math.ceil(style.length / 60) + 1;
+    height += 40 + styleLines * 24 + 24;
+  }
+
+  return Math.max(height, 200);
 }
 
 // 计算剧本区域高度 - 宽松估算确保内容完全显示

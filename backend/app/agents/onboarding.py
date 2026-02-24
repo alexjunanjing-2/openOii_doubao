@@ -1,19 +1,29 @@
 from __future__ import annotations
 
 import json
+import logging
+
+from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
 from app.agents.prompts.onboarding import SYSTEM_PROMPT
 from app.agents.utils import extract_json, utcnow
+from app.models.agent_run import AgentMessage
+
+logger = logging.getLogger(__name__)
 
 
 class OnboardingAgent(BaseAgent):
     name = "onboarding"
 
     async def run(self, ctx: AgentContext) -> None:
+        print(f"[Onboarding] 开始运行，项目ID: {ctx.project.id}, 标题: {ctx.project.title}")
+        logger.info(f"[DEBUG] OnboardingAgent.run started for project_id={ctx.project.id}, run_id={ctx.run.id}")
         # 发送开始消息
         await self.send_message(ctx, "正在分析故事...", progress=0.0, is_loading=True)
 
+        print(f"[Onboarding] 构建用户提示词")
+        logger.info(f"[DEBUG] Building user_prompt for project: id={ctx.project.id}, title={ctx.project.title}, story_length={len(ctx.project.story) if ctx.project.story else 0}")
         user_prompt = json.dumps(
             {
                 "project": {
@@ -22,13 +32,21 @@ class OnboardingAgent(BaseAgent):
                     "story": ctx.project.story,
                     "style": ctx.project.style,
                     "status": ctx.project.status,
-                }
+                },
+                "style_mode": ctx.style_mode,
             },
             ensure_ascii=False,
         )
 
+        print(f"[Onboarding] 调用LLM进行分析，max_tokens=4096")
+        logger.info(f"[DEBUG] Calling call_llm with max_tokens=4096")
         resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096)
+        print(f"[Onboarding] LLM响应已收到，开始解析数据")
+        logger.info(f"[DEBUG] LLM response received, text_length={len(resp.text) if resp.text else 0}")
+        
         data = extract_json(resp.text)
+        print(f"[Onboarding] 数据解析完成，开始处理各部分内容")
+        logger.info(f"[DEBUG] Extracted JSON data: keys={list(data.keys()) if isinstance(data, dict) else 'not a dict'}")
 
         # 提取并显示故事分析结果
         story_breakdown = data.get("story_breakdown") or {}
@@ -80,8 +98,10 @@ class OnboardingAgent(BaseAgent):
 
         # 发送分析结果
         if lines:
+            print(f"[Onboarding] 准备发送分析结果，共 {len(lines)} 条信息")
             await self.send_message(ctx, "\n".join(lines))
 
+        print(f"[Onboarding] 开始更新项目信息")
         # 更新项目信息
         project_update = data.get("project_update") or {}
         updated_fields: dict = {}
@@ -107,6 +127,7 @@ class OnboardingAgent(BaseAgent):
         ctx.session.add(ctx.project)
         await ctx.session.commit()
 
+        print(f"[Onboarding] 项目信息已更新到数据库，更新字段: {list(updated_fields.keys())}")
         # 发送 project_updated 事件，通知前端刷新标题等信息
         if updated_fields:
             await ctx.ws.send_event(
@@ -122,6 +143,25 @@ class OnboardingAgent(BaseAgent):
                 },
             )
 
+        # 保存完整输出到 AgentMessage，供后续 DirectorAgent 使用
+        onboarding_output = {
+            "story_breakdown": data.get("story_breakdown"),
+            "key_elements": data.get("key_elements"),
+            "style_recommendation": data.get("style_recommendation"),
+            "project_update": data.get("project_update"),
+        }
+        output_msg = AgentMessage(
+            run_id=ctx.run.id,
+            agent="onboarding",
+            role="system",
+            content=json.dumps(onboarding_output, ensure_ascii=False),
+        )
+        ctx.session.add(output_msg)
+        await ctx.session.commit()
+        print(f"[Onboarding] 完整输出已保存到 AgentMessage")
+
         # 发送完成消息
         title_msg = f"「{ctx.project.title}」" if ctx.project.title else ""
+        print(f"[Onboarding] 任务完成，项目标题: {ctx.project.title}")
+        logger.info(f"[DEBUG] OnboardingAgent.run completed successfully for project_id={ctx.project.id}")
         await self.send_message(ctx, f"✅ 项目初始化完成{title_msg}，接下来将由导演进行详细规划。", progress=1.0)

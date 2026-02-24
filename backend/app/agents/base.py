@@ -43,6 +43,8 @@ class AgentContext:
     user_feedback: str | None = None
     rerun_mode: str = "full"  # "full" or "incremental"
     target_ids: TargetIds | None = None  # 精细化控制的目标 ID
+    style_mode: str = "cartoon"  # "cartoon" or "realistic"
+    onboarding_output: dict[str, Any] | None = None  # OnboardingAgent 的完整输出
 
 
 class BaseAgent:
@@ -67,7 +69,6 @@ class BaseAgent:
         if is_loading:
             data["isLoading"] = True
 
-        # 保存到数据库
         message = Message(
             project_id=ctx.project.id,
             run_id=ctx.run.id,
@@ -76,11 +77,11 @@ class BaseAgent:
             content=content,
             progress=progress,
             is_loading=is_loading,
+            style_mode=ctx.style_mode,
         )
         ctx.session.add(message)
         await ctx.session.flush()
 
-        # 发送 WebSocket 事件
         await ctx.ws.send_event(
             ctx.project.id,
             {"type": "run_message", "data": data},
@@ -129,7 +130,7 @@ class BaseAgent:
         self,
         ctx: AgentContext,
         prompt: str,
-        image_bytes: bytes | None = None,
+        image_urls: list[str] | None = None,
         timeout_s: float | None = None,
         **kwargs: Any,
     ) -> str:
@@ -138,16 +139,16 @@ class BaseAgent:
         Args:
             ctx: Agent 上下文
             prompt: 图片生成 prompt
-            image_bytes: 可选的参考图片字节流（用于 I2I）
+            image_urls: 可选的参考图片 URL 列表（用于图生图）
             timeout_s: 仅对 generate_url 阶段生效的超时（秒）；缓存/下载不受此超时影响
             **kwargs: 传递给 generate_url 的额外参数
 
         Returns:
-            缓存后的图片 URL
+            缓存后的图片 URL 或原始 URL（取决于配置）
         """
         generate_url_coro = ctx.image.generate_url(
             prompt=prompt,
-            image_bytes=image_bytes,
+            image_urls=image_urls,
             **kwargs,
         )
         if timeout_s is not None:
@@ -157,7 +158,13 @@ class BaseAgent:
                 raise RuntimeError(f"图片生成超时（超过{timeout_s:.0f}秒）") from exc
         else:
             url = await generate_url_coro
-        return await ctx.image.cache_external_image(url)
+        
+        # 根据配置决定是否缓存图片
+        if ctx.settings.cache_generated_images:
+            return await ctx.image.cache_external_image(url)
+        else:
+            # 不缓存，直接返回图片生成服务的原始 URL
+            return url
 
     async def get_project_characters(self, ctx: AgentContext) -> list["Character"]:
         """获取项目的所有角色

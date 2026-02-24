@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -11,7 +11,15 @@
 
  h1, h2, h3, h4, h5, h6 {
    @apply font-heading;
-  }
+ }
+
+ [data-style-mode="realistic"] h1, [data-style-mode="realistic"] h2, [data-style-mode="realistic"] h3, [data-style-mode="realistic"] h4, [data-style-mode="realistic"] h5, [data-style-mode="realistic"] h6 {
+   @apply font-cinematic;
+ }
+
+ [data-style-mode="realistic"] body {
+   @apply font-cinematic;
+ }
 }
 
 @layer components {
@@ -22,6 +30,14 @@
  .card-doodle:hover {
    @apply shadow-brutal-lg -translate-x-0.5 -translate-y-0.5;
   }
+
+ /* 电影级风格卡片 */
+ .card-cinematic {
+   @apply bg-base-100 border border-base-300 rounded-xl shadow-cinematic transition-all duration-300 backdrop-blur-sm;
+ }
+ .card-cinematic:hover {
+   @apply shadow-cinematic-lg scale-[1.02];
+ }
 
  /* 涂鸦风格按钮 */
  .btn-doodle {
@@ -34,10 +50,23 @@
    @apply shadow-none translate-x-1 translate-y-1;
   }
 
+ /* 电影级风格按钮 */
+ .btn-cinematic {
+   @apply border border-base-300 rounded-lg shadow-cinematic-sm font-medium transition-all duration-300 bg-gradient-to-r from-primary/10 to-secondary/10 hover:from-primary/20 hover:to-secondary/20;
+ }
+ .btn-cinematic:hover {
+   @apply shadow-cinematic-glow;
+ }
+
  /* 涂鸦风格输入框 */
  .input-doodle {
    @apply border-3 border-base-content/30 rounded-lg bg-base-100 outline-none focus:border-primary;
   }
+
+ /* 电影级风格输入框 */
+ .input-cinematic {
+   @apply border border-base-300 rounded-lg bg-base-200 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-300;
+ }
 
  /* 手绘下划线效果 */
  .underline-sketch {
@@ -47,6 +76,24 @@
     background-size: 100px 10px;
     padding-bottom: 8px;
   }
+
+ /* 电影级渐变边框效果 */
+ .border-gradient {
+   position: relative;
+   background: linear-gradient(var(--tw-gradient-stops));
+ }
+ .border-gradient::before {
+   content: "";
+   position: absolute;
+   inset: 0;
+   border-radius: inherit;
+   padding: 1px;
+   background: linear-gradient(135deg, #3B82F6, #8B5CF6, #EC4899);
+   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+   -webkit-mask-composite: xor;
+   mask-composite: exclude;
+ }
 
  /* 涂鸦装饰 - 星星 */
  .doodle-star::before {
@@ -62,6 +109,28 @@
     content: "";
    @apply absolute -inset-2 border-2 border-dashed border-secondary rounded-full opacity-50;
   }
+
+ /* 电影级光晕效果 */
+ .glow-effect {
+   @apply relative overflow-hidden;
+ }
+ .glow-effect::before {
+   content: "";
+   position: absolute;
+   inset: -2px;
+   background: linear-gradient(45deg, #3B82F6, #8B5CF6, #EC4899, #3B82F6);
+   background-size: 400% 400%;
+   animation: glow-rotate 3s linear infinite;
+   z-index: -1;
+   border-radius: inherit;
+   filter: blur(8px);
+   opacity: 0.6;
+ }
+ @keyframes glow-rotate {
+   0% { background-position: 0% 50%; }
+   50% { background-position: 100% 50%; }
+   100% { background-position: 0% 50%; }
+ }
 }
 
 @layer utilities {
@@ -140,6 +209,13 @@
     50% { opacity: 1; }
     100% { opacity: 0; }
   }
+
+ /* 点状背景 - 黑色背景白色小点正方形排列 */
+ .bg-dots {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: #000;
+  }
 }
 
 /* 减少动画偏好 */
@@ -167,9 +243,37 @@
   background: transparent !important;
 }
 
-/* tldraw 背景层 - 使用主题色 */
-.infinite-canvas-container .tl-background {
-  background: oklch(var(--b1)) !important;
+/* tldraw 背景层 - 使用点状背景，根据主题自动调整颜色 */
+/* 浅色主题 */
+[data-theme="doodle"] .infinite-canvas-container .tl-background {
+  background-image: radial-gradient(rgba(0, 0, 0, 0.2) 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+  background-color: #FFFEF0 !important;
+}
+
+/* 深色主题 */
+[data-theme="doodle-dark"] .infinite-canvas-container .tl-background {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.2) 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+  background-color: #1a1a1a !important;
+}
+
+/* 电影级深色主题 */
+[data-theme="cinematic"] .infinite-canvas-container .tl-background {
+  background: linear-gradient(135deg, #0B0F19 0%, #111827 50%, #0B0F19 100%) !important;
+  background-image: 
+    radial-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+    linear-gradient(135deg, #0B0F19 0%, #111827 50%, #0B0F19 100%) !important;
+  background-size: 24px 24px, 100% 100% !important;
+}
+
+/* 电影级浅色主题 */
+[data-theme="cinematic-light"] .infinite-canvas-container .tl-background {
+  background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #F8FAFC 100%) !important;
+  background-image: 
+    radial-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
+    linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 50%, #F8FAFC 100%) !important;
+  background-size: 24px 24px, 100% 100% !important;
 }
 
 /* 隐藏 tldraw 默认 UI */

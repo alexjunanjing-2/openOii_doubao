@@ -21,7 +21,7 @@ from app.models.project import Project, Shot
 from app.schemas.project import AgentRunRead, RegenerateRequest, ShotRead, ShotUpdate
 from app.services.file_cleaner import delete_file
 from app.services.image import ImageService
-from app.services.llm import LLMService
+from app.services.llm import LLMService, create_llm_service
 from app.services.task_manager import task_manager
 from app.services.video_factory import create_video_service
 from app.ws.manager import ConnectionManager
@@ -69,10 +69,11 @@ async def _run_agent_plan(
                 ws=ws,
                 project=project,
                 run=run,
-                llm=LLMService(settings),
+                llm=create_llm_service(settings),
                 image=ImageService(settings),
                 video=create_video_service(settings),
                 target_ids=target_ids,
+                style_mode=run.style_mode,
             )
 
             await ws.send_event(
@@ -206,13 +207,25 @@ async def regenerate_shot(
     if payload.type == "image":
         delete_file(shot.image_url)
         shot.image_url = None
+        delete_file(shot.video_url)
+        shot.video_url = None
+        shot.duration = None
+
+        delete_file(project.video_url)
+        project.video_url = None
+
         session.add(shot)
+        session.add(project)
         await session.commit()
         await session.refresh(shot)
 
         await ws.send_event(
             project_id,
             {"type": "shot_updated", "data": {"shot": _shot_payload(shot)}},
+        )
+        await ws.send_event(
+            project_id,
+            {"type": "project_updated", "data": {"project": {"id": project_id, "video_url": None}}},
         )
 
         agent_plan = [StoryboardArtistAgent()]
@@ -246,8 +259,9 @@ async def regenerate_shot(
         current_agent=getattr(agent_plan[0], "name", None) if agent_plan else None,
         progress=0.0,
         error=None,
-        resource_type="shot",  # 设置资源类型
-        resource_id=shot_id,   # 设置资源 ID
+        resource_type="shot",
+        resource_id=shot_id,
+        style_mode=payload.style_mode if payload else "cartoon",
     )
     session.add(run)
     await session.commit()

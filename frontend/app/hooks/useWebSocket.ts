@@ -54,7 +54,7 @@ export function useProjectWebSocket(projectId: number | null) {
     ws.onmessage = (event) => {
       try {
         const data: WsEvent = JSON.parse(event.data);
-        handleWsEvent(data, useEditorStore.getState());
+        handleWsEvent(data, useEditorStore.getState(), projectId);
       } catch (e) {
         console.error("[WS] 解析错误:", e);
         toast.error({
@@ -70,7 +70,7 @@ export function useProjectWebSocket(projectId: number | null) {
       toast.error({
         title: "连接错误",
         message: "WebSocket 连接出现问题",
-        duration: 0, // 不自动消失
+        duration: 3000,
         actions: [
           {
             label: "重新连接",
@@ -103,7 +103,7 @@ export function useProjectWebSocket(projectId: number | null) {
         toast.error({
           title: "连接失败",
           message: "无法连接到服务器，请检查网络或刷新页面",
-          duration: 0, // 不自动消失
+          duration: 3000,
           actions: [
             {
               label: "刷新页面",
@@ -170,7 +170,7 @@ function clearLoadingStates(
   }
 }
 
-function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.getState>) {
+function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.getState>, _projectId: number) {
   switch (event.type) {
     case "connected":
       console.log("[WS] 服务器确认连接");
@@ -239,14 +239,39 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
     case "run_awaiting_confirm":
       // 清除所有 isLoading 状态
       clearLoadingStates(store);
-      store.setAwaitingConfirm(true, event.data.agent as string, event.data.run_id as number);
-      store.addMessage({
-        id: generateMessageId(),
-        agent: "system",
-        role: "info",
-        content: event.data.message as string,
-        timestamp: new Date().toISOString(),
-      });
+      
+      // 检查是否为自动模式
+      if (store.autoMode) {
+        // 自动模式：自动确认，不显示确认界面
+        const runId = event.data.run_id as number;
+        // 通过 WebSocket 发送确认消息
+        const ws = globalConnections.get(runId);
+        if (ws?.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ 
+            type: "confirm", 
+            data: { run_id: runId, feedback: undefined } 
+          }));
+        }
+        
+        // 添加自动确认消息
+        store.addMessage({
+          id: generateMessageId(),
+          agent: "system",
+          role: "info",
+          content: "[自动模式] 已自动确认，继续执行...",
+          timestamp: new Date().toISOString(),
+        });
+      } else {
+        // 非自动模式：显示确认界面
+        store.setAwaitingConfirm(true, event.data.agent as string, event.data.run_id as number);
+        store.addMessage({
+          id: generateMessageId(),
+          agent: "system",
+          role: "info",
+          content: event.data.message as string,
+          timestamp: new Date().toISOString(),
+        });
+      }
       break;
     case "run_confirmed":
       // 只清除 awaitingConfirm 状态，保留 currentRunId（run 仍在进行中）
@@ -256,6 +281,17 @@ function handleWsEvent(event: WsEvent, store: ReturnType<typeof useEditorStore.g
         agent: "system",
         role: "info",
         content: `已确认，继续执行...`,
+        timestamp: new Date().toISOString(),
+      });
+      break;
+    case "run_confirm_timeout":
+      // 超时自动继续，清除 awaitingConfirm 状态
+      store.setAwaitingConfirm(false);
+      store.addMessage({
+        id: generateMessageId(),
+        agent: "system",
+        role: "info",
+        content: event.data.message as string,
         timestamp: new Date().toISOString(),
       });
       break;

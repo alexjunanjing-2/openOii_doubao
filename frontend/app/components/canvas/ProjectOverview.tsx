@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEditorStore } from "~/stores/editorStore";
+import { useStyleModeStore } from "~/stores/styleModeStore";
 import { projectsApi, shotsApi, charactersApi, getStaticUrl } from "~/services/api";
 import type { Shot, Character } from "~/types";
 import {
@@ -53,6 +54,7 @@ function Section({ title, icon, children, isEmpty, emptyText }: SectionProps) {
 
 export function ProjectOverview({ projectId }: ProjectOverviewProps) {
   const { characters, shots, projectVideoUrl, updateCharacter, updateShot, removeCharacter, removeShot } = useEditorStore();
+  const { styleMode } = useStyleModeStore();
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   const [previewVideo, setPreviewVideo] = useState<{ src: string; title: string } | null>(null);
 
@@ -109,7 +111,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
   });
 
   const regenerateCharacterMutation = useMutation({
-    mutationFn: (id: number) => charactersApi.regenerate(id),
+    mutationFn: (id: number) => charactersApi.regenerate(id, styleMode),
     onMutate: (id) => {
       setRegeneratingCharacterId(id);
     },
@@ -134,7 +136,7 @@ export function ProjectOverview({ projectId }: ProjectOverviewProps) {
 
   const regenerateShotMutation = useMutation({
     mutationFn: ({ id, type }: { id: number; type: "image" | "video" }) =>
-      shotsApi.regenerate(id, type),
+      shotsApi.regenerate(id, type, styleMode),
     onMutate: ({ id, type }) => {
       setRegeneratingShotId(id);
       setRegeneratingShotType(type);

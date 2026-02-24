@@ -525,6 +525,7 @@ function getConfigDescription(key: string): string {
     DOUBAO_GENERATE_AUDIO: "豆包视频是否生成音频",
     VIDEO_IMAGE_MODE: "图生视频模式：first_frame（仅首帧）/ reference（拼接参考图）",
     VIDEO_INLINE_LOCAL_IMAGES: "未配置 PUBLIC_BASE_URL 时是否内联本地图片",
+    CACHE_GENERATED_IMAGES: "是否将图片生成服务返回的 URL 缓存到本地（true=缓存本地路径，false=保留原始 URL）",
 
     // 其他
     REQUEST_TIMEOUT_S: "HTTP 请求超时时间（秒）",

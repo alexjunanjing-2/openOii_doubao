@@ -17,6 +17,7 @@ import { useProjectWebSocket } from "~/hooks/useWebSocket";
 import { projectsApi } from "~/services/api";
 import { useEditorStore } from "~/stores/editorStore";
 import { useSidebarStore } from "~/stores/sidebarStore";
+import { useStyleModeStore } from "~/stores/styleModeStore";
 import { toast } from "~/utils/toast";
 import { ApiError } from "~/types/errors";
 
@@ -27,6 +28,7 @@ export function ProjectPage() {
   const queryClient = useQueryClient();
   const store = useEditorStore();
   const { isOpen: sidebarOpen, toggle: toggleSidebar } = useSidebarStore();
+  const { styleMode } = useStyleModeStore();
   const autoStartTriggered = useRef(false);
   const retryCount = useRef(0);
 
@@ -69,8 +71,8 @@ export function ProjectPage() {
   });
 
   const { data: messages } = useQuery({
-    queryKey: ["messages", projectId],
-    queryFn: () => projectsApi.getMessages(projectId),
+    queryKey: ["messages", projectId, styleMode],
+    queryFn: () => projectsApi.getMessages(projectId, styleMode),
     enabled: !!project,
   });
 
@@ -90,13 +92,23 @@ export function ProjectPage() {
     }
   }, [project?.video_url]);
 
-  // 加载历史消息（只在数据加载完成后执行一次）
+  // 加载历史消息
   const messagesLoadedRef = useRef(false);
+  const lastLoadedStyleMode = useRef<string | null>(null);
 
   // 当项目 ID 变化时，立即清空状态，确保项目完全独立
   useEffect(() => {
+    // 如果是同一个项目（例如页面刷新），则不重置状态，以便恢复生成进度
+    if (store.currentProjectId === projectId) {
+      return;
+    }
+
+    // 更新当前项目 ID
+    store.setCurrentProjectId(projectId);
+
     // 重置消息加载标记
     messagesLoadedRef.current = false;
+    lastLoadedStyleMode.current = null;
 
     // 清空消息
     store.clearMessages();
@@ -118,16 +130,21 @@ export function ProjectPage() {
 
     // 清空项目视频
     store.setProjectVideoUrl(null);
-
-    // 注意：不清空画布数据（characters/shots），让 React Query 的数据自然覆盖
-    // 避免竞态条件导致数据被清空
   }, [projectId]);
 
-  // 当新项目的消息加载完成后，恢复历史消息
+  // 当 styleMode 变化时，清空消息并重新加载
   useEffect(() => {
-    if (messages && !messagesLoadedRef.current) {
+    if (lastLoadedStyleMode.current !== null && lastLoadedStyleMode.current !== styleMode) {
+      store.clearMessages();
+      messagesLoadedRef.current = false;
+    }
+  }, [styleMode]);
+
+  // 当消息数据加载完成后，恢复历史消息
+  useEffect(() => {
+    if (messages && (!messagesLoadedRef.current || lastLoadedStyleMode.current !== styleMode)) {
       messagesLoadedRef.current = true;
-      // 加载历史消息（使用数据库 ID 作为消息 ID）
+      lastLoadedStyleMode.current = styleMode;
       messages.forEach((msg) => {
         store.addMessage({
           id: `db_${msg.id}`,
@@ -140,10 +157,10 @@ export function ProjectPage() {
         });
       });
     }
-  }, [messages]);
+  }, [messages, styleMode]);
 
   const generateMutation = useMutation({
-    mutationFn: () => projectsApi.generate(projectId),
+    mutationFn: () => projectsApi.generate(projectId, { auto_mode: store.autoMode, style_mode: styleMode }),
     onSuccess: () => {
       // 重置重试计数
       retryCount.current = 0;
@@ -186,9 +203,8 @@ export function ProjectPage() {
   });
 
   const feedbackMutation = useMutation({
-    mutationFn: (content: string) => projectsApi.feedback(projectId, content),
+    mutationFn: (content: string) => projectsApi.feedback(projectId, content, undefined, styleMode),
     onSuccess: () => {
-      // feedback API 成功会创建新的 run，WebSocket 会收到 run_started 事件
     },
     onError: (error: Error | ApiError) => {
       const apiError = error instanceof ApiError ? error : null;
@@ -245,8 +261,7 @@ export function ProjectPage() {
   const handleConfirm = (feedback?: string) => {
     const runId = store.currentRunId;
     if (runId) {
-      // 有活跃的 run，通过 WebSocket 发送
-      send({ type: "confirm", data: { run_id: runId, feedback } });
+      send({ type: "confirm", data: { run_id: runId, feedback, style_mode: styleMode } });
       if (feedback) {
         store.addMessage({
           agent: "user",
@@ -256,7 +271,6 @@ export function ProjectPage() {
         });
       }
     } else {
-      // 没有活跃的 run 时，记录警告而不是错误地调用 feedback API
       console.warn("[handleConfirm] No active run ID, cannot send confirm");
     }
   };

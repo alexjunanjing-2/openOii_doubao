@@ -131,7 +131,7 @@ export function MessageList({ messages }: MessageListProps) {
         // Agent 邀请消息特殊处理
         if (msg.role === "handoff") {
           return (
-            <div key={key} className="flex justify-center my-3 animate-fade-in">
+            <div key={key} className="flex justify-center my-3 animate-fade-in scale-[0.8]">
               <div className="badge badge-outline badge-lg gap-2 py-3 text-base-content">
                 <HandRaisedIcon className="w-5 h-5" aria-hidden="true" />
                 <span>{msg.content}</span>

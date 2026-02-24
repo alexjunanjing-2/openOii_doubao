@@ -130,31 +130,62 @@ function ConnectorComponent({ shape }: { shape: ConnectorShape }) {
         pointerEvents: "none",
       }}
     >
+      {/* 连接线 - 发光效果 */}
+      <defs>
+        <linearGradient id={`gradient-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="rgba(100, 149, 237, 0.8)" />
+          <stop offset="50%" stopColor="rgba(147, 112, 219, 0.6)" />
+          <stop offset="100%" stopColor="rgba(100, 149, 237, 0.8)" />
+        </linearGradient>
+        <filter id={`glow-${shape.id}`} x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+      </defs>
+      
       {/* 连接线 */}
       <path
         d={pathD}
         fill="none"
-        stroke="oklch(var(--bc) / 0.3)"
+        stroke={`url(#gradient-${shape.id})`}
         strokeWidth={2}
-        strokeDasharray="6 4"
+        filter={`url(#glow-${shape.id})`}
       />
-      {/* 起点圆点 */}
+      
+      {/* 起点圆点 - 发光效果 */}
       <circle
         cx={start.x}
         cy={start.y}
-        r={4}
-        fill="oklch(var(--b1))"
-        stroke="oklch(var(--bc) / 0.3)"
-        strokeWidth={2}
+        r={6}
+        fill="rgba(100, 149, 237, 0.2)"
+        filter={`url(#glow-${shape.id})`}
       />
-      {/* 终点圆点 */}
+      <circle
+        cx={start.x}
+        cy={start.y}
+        r={3}
+        fill="oklch(var(--b1))"
+        stroke="rgba(100, 149, 237, 0.8)"
+        strokeWidth={2}
+        filter={`url(#glow-${shape.id})`}
+      />
+      
+      {/* 终点圆点 - 发光效果 */}
       <circle
         cx={end.x}
         cy={end.y}
-        r={4}
+        r={6}
+        fill="rgba(100, 149, 237, 0.2)"
+        filter={`url(#glow-${shape.id})`}
+      />
+      <circle
+        cx={end.x}
+        cy={end.y}
+        r={3}
         fill="oklch(var(--b1))"
-        stroke="oklch(var(--bc) / 0.3)"
+        stroke="rgba(100, 149, 237, 0.8)"
         strokeWidth={2}
+        filter={`url(#glow-${shape.id})`}
       />
     </svg>
   );

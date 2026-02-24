@@ -50,33 +50,49 @@ class VideoService:
         return None
 
     async def _post_json_with_retry(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        headers = self.settings.video_headers()
+        print(f"[VideoService] 开始JSON请求，URL: {url}")
+        print(f"[VideoService] 请求 Headers: {json.dumps(headers, ensure_ascii=False)}")
+        print(f"[VideoService] 请求 Body: {json.dumps(payload, ensure_ascii=False)}")
         delay_s = 0.5
         last_exc: Exception | None = None
 
         async with httpx.AsyncClient(timeout=self.settings.request_timeout_s) as client:
             for attempt in range(self.max_retries + 1):
                 try:
-                    res = await client.post(url, headers=self.settings.video_headers(), json=payload)
+                    res = await client.post(url, headers=headers, json=payload)
+                    print(f"[VideoService] 响应状态码: {res.status_code}")
                     if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                        print(f"[VideoService] 状态码 {res.status_code} 可重试，等待 {delay_s} 秒后重试")
                         await asyncio.sleep(delay_s)
                         delay_s = min(delay_s * 2, 8.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    result = res.json()
+                    print(f"[VideoService] 请求成功，响应数据: {json.dumps(result, ensure_ascii=False)[:200]}")
+                    return result
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
+                    print(f"[VideoService] 请求失败: {type(exc).__name__}: {exc}")
                     if attempt >= self.max_retries:
                         break
                     status = getattr(getattr(exc, "response", None), "status_code", None)
+                    print(f"[VideoService] 响应状态码: {status}")
                     if isinstance(status, int) and not self._is_retryable_status(status):
                         break
+                    print(f"[VideoService] 等待 {delay_s} 秒后重试")
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
+        print(f"[VideoService] 请求失败，已重试 {self.max_retries} 次，最终错误: {last_exc}")
         raise RuntimeError(f"Video generation request failed after retries: {last_exc}") from last_exc
 
     async def _post_stream_with_retry(self, url: str, payload: dict[str, Any]) -> str:
         """流式请求，收集所有 chunk 并提取最终 URL"""
+        headers = self.settings.video_headers()
+        print(f"[VideoService] 开始流式请求，URL: {url}")
+        print(f"[VideoService] 请求 Headers: {json.dumps(headers, ensure_ascii=False)}")
+        print(f"[VideoService] 请求 Body: {json.dumps(payload, ensure_ascii=False)}")
         delay_s = 0.5
         last_exc: Exception | None = None
 
@@ -86,11 +102,14 @@ class VideoService:
         async with httpx.AsyncClient(timeout=timeout) as client:
             for attempt in range(self.max_retries + 1):
                 try:
+                    print(f"[VideoService] 第 {attempt + 1} 次尝试发送流式请求")
                     collected_content = ""
                     async with client.stream(
-                        "POST", url, headers=self.settings.video_headers(), json=payload
+                        "POST", url, headers=headers, json=payload
                     ) as res:
+                        print(f"[VideoService] 流式响应状态码: {res.status_code}")
                         if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
+                            print(f"[VideoService] 状态码 {res.status_code} 可重试，等待 {delay_s} 秒后重试")
                             await asyncio.sleep(delay_s)
                             delay_s = min(delay_s * 2, 8.0)
                             continue
@@ -106,6 +125,7 @@ class VideoService:
                                 chunk = json.loads(data_str)
                                 # 检查是否有错误
                                 if "error" in chunk:
+                                    print(f"[VideoService] 流式响应错误: {chunk['error']}")
                                     raise RuntimeError(f"Stream error: {chunk['error']}")
                                 # 提取 content
                                 choices = chunk.get("choices", [])
@@ -119,6 +139,7 @@ class VideoService:
                                 if "error" in data_str:
                                     try:
                                         err = json.loads(data_str)
+                                        print(f"[VideoService] 流式响应错误: {err}")
                                         raise RuntimeError(f"Stream error: {err}")
                                     except json.JSONDecodeError:
                                         logger.debug("Non-JSON error line in stream: %s", data_str[:100])
@@ -126,18 +147,23 @@ class VideoService:
                                     logger.debug("Skipping non-JSON line in video stream: %s", e)
                                 continue
 
+                    print(f"[VideoService] 流式请求成功，收集到的内容长度: {len(collected_content)}")
                     return collected_content
 
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
+                    print(f"[VideoService] 流式请求失败: {type(exc).__name__}: {exc}")
                     if attempt >= self.max_retries:
                         break
                     status = getattr(getattr(exc, "response", None), "status_code", None)
+                    print(f"[VideoService] 响应状态码: {status}")
                     if isinstance(status, int) and not self._is_retryable_status(status):
                         break
+                    print(f"[VideoService] 等待 {delay_s} 秒后重试")
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 8.0)
 
+        print(f"[VideoService] 流式请求失败，已重试 {self.max_retries} 次，最终错误: {last_exc}")
         raise RuntimeError(f"Video generation stream failed after retries: {last_exc}") from last_exc
 
     async def generate(

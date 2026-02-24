@@ -6,9 +6,7 @@ import logging
 from sqlalchemy import select
 
 from app.agents.base import AgentContext, BaseAgent
-from app.agents.utils import build_character_context
 from app.models.project import Character, Shot
-from app.services.image_composer import ImageComposer
 
 logger = logging.getLogger(__name__)
 
@@ -17,55 +15,57 @@ class StoryboardArtistAgent(BaseAgent):
     """为分镜生成首帧图片"""
     name = "storyboard_artist"
 
-    def __init__(self):
-        super().__init__()
-        self.image_composer = ImageComposer()
-
-    def _build_image_prompt(self, shot: Shot, characters: list[Character], *, style: str) -> str:
+    def _build_image_prompt(self, shot: Shot, characters: list[Character], *, style: str, use_character_reference: bool = False, style_mode: str = "cartoon") -> str:
         """构建首帧图片生成 prompt"""
         # 优先使用 image_prompt，否则使用 description
         desc = shot.image_prompt or shot.description
         parts = [desc.strip()]
 
-        # 使用工具函数构建角色上下文
-        char_context = build_character_context(characters)
-        if char_context:
-            parts.append(char_context)
+        # 根据风格模式添加不同的风格关键词
+        if style_mode == "cartoon":
+            # 卡通/热血战斗类日系动漫风格
+            anime_style = "hot-blooded battle anime, Japanese shonen style, dynamic action angles, vibrant colors, dramatic lighting"
+            parts.append(anime_style)
+        else:
+            # 真人/电影级风格
+            realistic_style = "photorealistic, cinematic, natural lighting, realistic textures, film quality, high detail"
+            parts.append(realistic_style)
 
-        # 强制动漫风格：添加更具体的风格关键词
-        anime_style = "anime, 2D illustration, cel-shading, vibrant colors, Japanese animation style"
-        parts.append(anime_style)
         if style.strip():
             parts.append(style.strip())
 
-        return ", ".join(parts)
+        prompt = ", ".join(parts)
+
+        # 如果启用角色图参考，添加参考图说明
+        if use_character_reference and characters:
+            char_refs = []
+            for i, char in enumerate(characters, 1):
+                if char.name:
+                    char_refs.append(f"图{i} 是角色 {char.name} 参考图")
+            if char_refs:
+                prompt += "，" + "，".join(char_refs)
+
+        return prompt
 
     async def run(self, ctx: AgentContext) -> None:
-        use_i2i = ctx.settings.use_i2i()
+        print(f"[StoryboardArtist] 开始运行，项目ID: {ctx.project.id}")
+        use_character_reference = ctx.settings.storyboard_use_character_reference
 
         # 使用基类方法查询项目角色
         characters = await self.get_project_characters(ctx)
+        print(f"[StoryboardArtist] 获取到 {len(characters)} 个角色")
 
-        # 收集有图片的角色 URL（用于 I2I 参考图）
-        char_image_urls = [c.image_url for c in characters if c.image_url]
-        reference_image_bytes: bytes | None = None
-
-        if use_i2i:
-            if not char_image_urls:
-                logger.info("I2I enabled but no character images available; will fall back to text-to-image")
+        # 收集有图片的角色 URL（用于角色图参考）
+        character_image_urls: list[str] = []
+        if use_character_reference:
+            character_image_urls = [c.image_url for c in characters if c.image_url]
+            print(f"[StoryboardArtist] 收集到的角色图片 URL: {character_image_urls}")
+            if not character_image_urls:
+                logger.info("Character reference enabled but no character images available; will fall back to text-to-image")
+                print(f"[StoryboardArtist] 没有角色图片，将使用文生图模式")
             else:
-                try:
-                    reference_image_bytes = await self.image_composer.compose_character_reference_image(
-                        char_image_urls
-                    )
-                    logger.info("I2I enabled: composed character reference image with %d characters", len(char_image_urls))
-                except Exception as exc:
-                    reference_image_bytes = None
-                    logger.warning(
-                        "Failed to compose character reference image; falling back to text-to-image: %s",
-                        exc,
-                        exc_info=True,
-                    )
+                logger.info("Character reference enabled: using %d character images as reference", len(character_image_urls))
+                print(f"[StoryboardArtist] 角色图参考模式已启用，包含 {len(character_image_urls)} 个角色")
 
         # 查找没有首帧图片的 Shot（可按目标分镜过滤）
         query = (
@@ -81,6 +81,7 @@ class StoryboardArtistAgent(BaseAgent):
         res = await ctx.session.execute(query)
         shots = res.scalars().all()
         if not shots:
+            print(f"[StoryboardArtist] 所有分镜已有首帧图片，跳过")
             await self.send_message(ctx, "所有分镜已有首帧图片。")
             return
 
@@ -89,10 +90,14 @@ class StoryboardArtistAgent(BaseAgent):
         failed_count = 0
 
         # 发送带进度的消息
+        print(f"[StoryboardArtist] 开始为 {total} 个分镜生成首帧图片")
         await self.send_message(ctx, f"🖼️ 开始为 {total} 个分镜生成首帧图片...", progress=0.0, is_loading=True)
 
         for i, shot in enumerate(shots):
+            shot_order = shot.order
+            shot_id = shot.id
             try:
+                print(f"[StoryboardArtist] 正在处理分镜 {i+1}/{total}, ID: {shot_id}, 顺序: {shot_order}")
                 # 使用基类方法发送进度消息
                 await self.send_progress_batch(
                     ctx,
@@ -100,14 +105,15 @@ class StoryboardArtistAgent(BaseAgent):
                     current=i,
                     message=f"   正在绘制分镜 {i+1}/{total}...",
                 )
+                await ctx.session.commit()  # Release lock before slow generation
 
-                image_prompt = self._build_image_prompt(shot, characters, style=ctx.project.style)
+                image_prompt = self._build_image_prompt(shot, characters, style=ctx.project.style, use_character_reference=use_character_reference, style_mode=ctx.style_mode)
 
                 # 仅对 URL 生成阶段加超时（8分钟），缓存/下载不受此超时影响
                 image_url = await self.generate_and_cache_image(
                     ctx,
                     prompt=image_prompt,
-                    image_bytes=reference_image_bytes if use_i2i else None,
+                    image_urls=character_image_urls if use_character_reference else None,
                     timeout_s=480.0,
                 )
 
@@ -116,7 +122,9 @@ class StoryboardArtistAgent(BaseAgent):
                 await ctx.session.flush()  # 确保更新生效
                 # 发送分镜更新事件
                 await self.send_shot_event(ctx, shot, "shot_updated")
+                await ctx.session.commit()  # Release lock after update
                 updated_count += 1
+                print(f"[StoryboardArtist] 分镜 {shot_order} 首帧图片生成成功")
 
                 # 添加延迟避免 API 限流（每张图片后等待 1 秒）
                 if i < total - 1:
@@ -124,12 +132,16 @@ class StoryboardArtistAgent(BaseAgent):
 
             except Exception as e:
                 failed_count += 1
-                error_msg = f"⚠️ 镜头 {shot.order} 首帧图片生成失败: {str(e)[:100]}"
+                print(f"[StoryboardArtist] 分镜 {shot_order} 首帧图片生成失败: {e}")
+                error_msg = f"⚠️ 镜头 {shot_order} 首帧图片生成失败: {str(e)[:100]}"
                 await self.send_message(ctx, error_msg)
+                await ctx.session.rollback()  # Rollback on error
                 # 失败后等待更长时间再继续
                 await asyncio.sleep(2.0)
-
+        
+        # Final commit just in case
         await ctx.session.commit()
+        print(f"[StoryboardArtist] 完成，成功 {updated_count}/{total}，失败 {failed_count}")
 
         # 完成消息
         if updated_count > 0:

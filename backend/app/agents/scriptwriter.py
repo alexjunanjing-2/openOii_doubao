@@ -13,6 +13,7 @@ from app.models.project import Character, Shot
 
 def _character_to_description(item: dict) -> str:
     """将角色数据转换为描述文本"""
+    name = item.get("name", "")
     parts: list[str] = []
     for key in ["personality_traits", "goals", "fears", "voice_notes", "costume_notes"]:
         value = item.get(key)
@@ -27,7 +28,12 @@ def _character_to_description(item: dict) -> str:
     if isinstance(description, str) and description.strip():
         parts.insert(0, description.strip())
 
-    return "\n".join(parts) if parts else json.dumps(item, ensure_ascii=False)
+    result = "\n".join(parts) if parts else ""
+    if isinstance(name, str) and name.strip():
+        if result:
+            return f"{name.strip()}，{result}"
+        return name.strip()
+    return result if result else json.dumps(item, ensure_ascii=False)
 
 
 def _scene_to_description(scene: dict) -> str:
@@ -233,13 +239,17 @@ class ScriptwriterAgent(BaseAgent):
         return new_char_count, new_scene_count, new_shot_count
 
     async def run(self, ctx: AgentContext) -> None:
+        print(f"[Scriptwriter] 开始运行，项目ID: {ctx.project.id}, 标题: {ctx.project.title}, 模式: {ctx.rerun_mode}")
         # 发送开始消息
         is_incremental = ctx.rerun_mode == "incremental"
         if is_incremental:
             await self.send_message(ctx, "✍️ 正在增量更新剧本...", progress=0.0, is_loading=True)
         else:
             await self.send_message(ctx, "✍️ 正在创作剧本...", progress=0.0, is_loading=True)
+        
+        await ctx.session.commit()  # Release lock before LLM call
 
+        print(f"[Scriptwriter] 构建用户提示词，包含项目信息和模式")
         # 注意：不再检查是否已有场景，因为 _cleanup_for_rerun 会在重新运行前清理数据
         # 如果需要跳过已完成的项目，应该在 orchestrator 层面处理
 
@@ -252,18 +262,22 @@ class ScriptwriterAgent(BaseAgent):
                 "status": ctx.project.status,
             },
             "mode": ctx.rerun_mode,
+            "style_mode": ctx.style_mode,
         }
         if ctx.user_feedback:
             payload["user_feedback"] = ctx.user_feedback
 
         # 增量模式下，传递现有状态
         if is_incremental:
+            print(f"[Scriptwriter] 增量模式，获取现有状态")
             existing_state = await self._get_existing_state(ctx)
             payload["existing_state"] = existing_state
 
         user_prompt = json.dumps(payload, ensure_ascii=False)
 
+        print(f"[Scriptwriter] 调用LLM生成剧本，max_tokens=4096")
         resp = await self.call_llm(ctx, system_prompt=SYSTEM_PROMPT, user_prompt=user_prompt, max_tokens=4096)
+        print(f"[Scriptwriter] LLM响应已收到，开始解析剧本数据")
         data = extract_json(resp.text)
 
         # 更新项目状态
@@ -277,6 +291,7 @@ class ScriptwriterAgent(BaseAgent):
 
         # 增量模式：使用增量更新逻辑
         if is_incremental:
+            print(f"[Scriptwriter] 增量模式，应用增量更新")
             new_char_count, _, new_shot_count = await self._apply_incremental_changes(ctx, data)
 
             # 重新查询最终状态
@@ -299,6 +314,7 @@ class ScriptwriterAgent(BaseAgent):
 
             # 显示更新摘要
             char_names = [c.name for c in final_chars]
+            print(f"[Scriptwriter] 增量更新完成：{len(final_chars)} 个角色，{len(final_shots)} 个分镜")
             await self.send_message(ctx, f"👥 角色设定：{', '.join(char_names)}")
 
             total_shots = len(final_shots)
@@ -310,9 +326,11 @@ class ScriptwriterAgent(BaseAgent):
             return
 
         # 全量模式：原有逻辑
+        print(f"[Scriptwriter] 全量模式，创建角色和分镜")
         # 创建角色（不含图片）
         raw_characters = data.get("characters") or []
         if isinstance(raw_characters, list) and raw_characters:
+            print(f"[Scriptwriter] 开始创建 {len(raw_characters)} 个角色")
             new_characters: list[Character] = []
             char_names: list[str] = []
             for item in raw_characters:
@@ -343,6 +361,7 @@ class ScriptwriterAgent(BaseAgent):
         if not isinstance(raw_shots, list) or not raw_shots:
             raise ValueError("LLM 响应未返回任何分镜")
 
+        print(f"[Scriptwriter] 开始创建 {len(raw_shots)} 个分镜")
         new_shots: list[Shot] = []
         fallback_order = 1
         for idx, shot_data in enumerate(raw_shots):
@@ -382,4 +401,5 @@ class ScriptwriterAgent(BaseAgent):
         for shot in new_shots:
             await self.send_shot_event(ctx, shot, "shot_created")
         await ctx.session.commit()
+        print(f"[Scriptwriter] 剧本创作完成，共 {len(new_shots)} 个镜头")
         await self.send_message(ctx, f"✅ 剧本创作完成：{len(new_shots)} 个镜头，接下来将进行角色设计。", progress=1.0)

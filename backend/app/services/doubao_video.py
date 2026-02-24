@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import mimetypes
 from typing import Any, Literal
@@ -103,6 +104,12 @@ class DoubaoVideoService:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """带重试的 HTTP 请求"""
+        headers = self._get_headers()
+        body = kwargs.get("json") or kwargs.get("data")
+        print(f"[DoubaoVideoService] 开始请求，method={method}, url={url}")
+        print(f"[DoubaoVideoService] 请求 Headers: {json.dumps(headers, ensure_ascii=False)}")
+        if body:
+            print(f"[DoubaoVideoService] 请求 Body: {json.dumps(body, ensure_ascii=False)}")
         delay_s = 1.0
         last_exc: Exception | None = None
 
@@ -113,31 +120,39 @@ class DoubaoVideoService:
                     res = await client.request(
                         method,
                         url,
-                        headers=self._get_headers(),
+                        headers=headers,
                         **kwargs,
                     )
+                    print(f"[DoubaoVideoService] 响应状态码: {res.status_code}")
                     if self._is_retryable_status(res.status_code) and attempt < self.max_retries:
                         logger.warning(
                             f"Doubao API returned {res.status_code}, retrying ({attempt + 1}/{self.max_retries})"
                         )
+                        print(f"[DoubaoVideoService] 状态码 {res.status_code} 可重试，等待 {delay_s} 秒后重试")
                         await asyncio.sleep(delay_s)
                         delay_s = min(delay_s * 2, 16.0)
                         continue
                     res.raise_for_status()
-                    return res.json()
+                    result = res.json()
+                    print(f"[DoubaoVideoService] 请求成功，响应数据: {json.dumps(result, ensure_ascii=False)[:200]}")
+                    return result
                 except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                     last_exc = exc
+                    print(f"[DoubaoVideoService] 请求失败: {type(exc).__name__}: {exc}")
                     if attempt >= self.max_retries:
                         break
                     status = getattr(getattr(exc, "response", None), "status_code", None)
+                    print(f"[DoubaoVideoService] 响应状态码: {status}")
                     if isinstance(status, int) and not self._is_retryable_status(status):
                         break
                     logger.warning(
                         f"Doubao API request failed: {exc}, retrying ({attempt + 1}/{self.max_retries})"
                     )
+                    print(f"[DoubaoVideoService] 等待 {delay_s} 秒后重试")
                     await asyncio.sleep(delay_s)
                     delay_s = min(delay_s * 2, 16.0)
 
+        print(f"[DoubaoVideoService] 请求失败，已重试 {self.max_retries} 次，最终错误: {last_exc}")
         raise RuntimeError(f"Doubao API request failed after retries: {last_exc}") from last_exc
 
     async def create_task(
@@ -145,7 +160,7 @@ class DoubaoVideoService:
         *,
         prompt: str,
         image_url: str | None = None,
-        duration: Literal[5, 10] = 5,
+        duration: int = 5,
         ratio: Literal["16:9", "9:16", "1:1", "adaptive"] = "adaptive",
         generate_audio: bool = True,
         watermark: bool = False,
@@ -156,7 +171,7 @@ class DoubaoVideoService:
         Args:
             prompt: 视频描述文本
             image_url: 首帧图片 URL（图生视频模式）
-            duration: 视频时长（5 或 10 秒）
+            duration: 视频时长（固定模式：4-12之间的整数秒；自动模式：-1表示模型自动选择）
             ratio: 视频比例
             generate_audio: 是否生成音频
             watermark: 是否添加水印
@@ -165,17 +180,27 @@ class DoubaoVideoService:
         Returns:
             任务 ID
         """
+        print(f"[DoubaoVideoService] 开始创建视频生成任务，prompt={prompt[:50]}..., image_url={bool(image_url)}, duration={duration}")
         url = f"{self.BASE_URL}{self.CREATE_ENDPOINT}"
 
         if image_url:
             original_image_url = image_url
             image_url = self.settings.build_public_url(image_url)
+            print(f"[DoubaoVideoService] 原始图片URL: {original_image_url}")
+            print(f"[DoubaoVideoService] 转换后图片URL: {image_url}")
+            
+            # 只有在图片是本地路径且无法转换为公共URL时，才转换为base64
+            is_local_path = original_image_url.startswith("/") or (image_url == original_image_url and not original_image_url.startswith(("http://", "https://", "data:")))
             if (
-                image_url == original_image_url
+                is_local_path
+                and image_url == original_image_url
                 and self.settings.video_inline_local_images
                 and not image_url.startswith("data:")
             ):
+                print(f"[DoubaoVideoService] 检测到本地路径，转换为base64")
                 image_url = self._inline_local_image(image_url)
+            else:
+                print(f"[DoubaoVideoService] 使用URL模式: {image_url[:100]}...")
 
         # 构建参数字符串（通过 prompt 文本传递）
         params_str = ""
@@ -195,9 +220,9 @@ class DoubaoVideoService:
             content.append({
                 "type": "image_url",
                 "image_url": {
-                    "url": image_url,
-                    "role": "first_frame"  # 指定为首帧图片
-                }
+                    "url": image_url
+                },
+                "role": "first_frame"  # 指定为首帧图片，与 type、image_url 平级
             })
 
         payload = {
@@ -214,6 +239,7 @@ class DoubaoVideoService:
             raise RuntimeError(f"Doubao API response missing task ID: {result}")
 
         logger.info(f"Doubao video task created: {task_id}")
+        print(f"[DoubaoVideoService] 视频生成任务创建成功，task_id={task_id}")
         return task_id
 
     async def query_task(self, task_id: str) -> dict[str, Any]:
@@ -244,12 +270,15 @@ class DoubaoVideoService:
             完成的任务信息
         """
         start_time = asyncio.get_event_loop().time()
+        poll_count = 0
 
         while True:
+            poll_count += 1
             elapsed = asyncio.get_event_loop().time() - start_time
             if elapsed > self.max_poll_time:
                 raise TimeoutError(f"Doubao video task {task_id} timed out after {self.max_poll_time}s")
 
+            print(f"[DoubaoVideoService] 第 {poll_count} 次查询任务状态，task_id={task_id}")
             result = await self.query_task(task_id)
             status = result.get("status", "")
 
@@ -279,7 +308,7 @@ class DoubaoVideoService:
         *,
         prompt: str,
         image_url: str | None = None,
-        duration: Literal[5, 10] = 5,
+        duration: int = 5,
         ratio: Literal["16:9", "9:16", "1:1", "adaptive"] = "adaptive",
         generate_audio: bool = True,
         watermark: bool = False,
@@ -291,7 +320,7 @@ class DoubaoVideoService:
         Args:
             prompt: 视频描述文本
             image_url: 首帧图片 URL（图生视频模式）
-            duration: 视频时长（5 或 10 秒）
+            duration: 视频时长（固定模式：4-12之间的整数秒；自动模式：-1表示模型自动选择）
             ratio: 视频比例
             generate_audio: 是否生成音频
             watermark: 是否添加水印

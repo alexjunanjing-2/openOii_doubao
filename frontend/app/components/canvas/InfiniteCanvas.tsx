@@ -3,6 +3,7 @@ import { Tldraw, type Editor, type TLComponents } from "tldraw";
 import "tldraw/tldraw.css";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEditorStore } from "~/stores/editorStore";
+import { useStyleModeStore } from "~/stores/styleModeStore";
 import {
   projectsApi,
   shotsApi,
@@ -56,6 +57,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     removeCharacter,
     removeShot,
   } = useEditorStore();
+  const { styleMode } = useStyleModeStore();
 
   // 项目数据
   const { data: project } = useQuery({
@@ -88,7 +90,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
   });
 
   const regenerateCharacterMutation = useMutation({
-    mutationFn: (id: number) => charactersApi.regenerate(id),
+    mutationFn: (id: number) => charactersApi.regenerate(id, styleMode),
   });
 
   const deleteCharacterMutation = useMutation({
@@ -110,7 +112,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
   const regenerateShotMutation = useMutation({
     mutationFn: ({ id, type }: { id: number; type: "image" | "video" }) =>
-      shotsApi.regenerate(id, type),
+      shotsApi.regenerate(id, type, styleMode),
   });
 
   const deleteShotMutation = useMutation({
@@ -127,6 +129,8 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
 
   // 计算布局
   const shapes = useCanvasLayout({
+    story: project?.story || null,
+    style: project?.style || null,
     summary: project?.summary || null,
     characters,
     shots,
@@ -154,7 +158,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     return () => {
       unsubscribers.forEach((unsub) => unsub());
     };
-  }, [regenerateCharacterMutation, regenerateShotMutation]);
+  }, [regenerateCharacterMutation, regenerateShotMutation, styleMode]);
 
   // 初始化画布
   const handleMount = useCallback(
@@ -208,7 +212,7 @@ export function InfiniteCanvas({ projectId }: InfiniteCanvasProps) {
     });
   }, [shapes, isInitialized]);
 
-  const hasContent = project?.summary || characters.length > 0 || shots.length > 0;
+  const hasContent = (project?.story && project.story.trim()) || (project?.style && project.style.trim() && project.style !== "anime") || project?.summary || characters.length > 0 || shots.length > 0;
 
   if (!hasContent) {
     return (

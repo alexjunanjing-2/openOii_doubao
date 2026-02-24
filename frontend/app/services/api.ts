@@ -123,10 +123,10 @@ export const projectsApi = {
   getShots: (id: number) =>
     fetchApi<import("~/types").Shot[]>(`/api/v1/projects/${id}/shots`),
 
-  getMessages: (id: number) =>
-    fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages`),
+  getMessages: (id: number, styleMode?: "cartoon" | "realistic") =>
+    fetchApi<import("~/types").Message[]>(`/api/v1/projects/${id}/messages${styleMode ? `?style_mode=${styleMode}` : ""}`),
 
-  generate: (id: number, data?: { seed?: number; notes?: string }) =>
+  generate: (id: number, data?: { seed?: number; notes?: string; auto_mode?: boolean; style_mode?: "cartoon" | "realistic" }) =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/projects/${id}/generate`, {
       method: "POST",
       body: JSON.stringify(data || {}),
@@ -137,10 +137,10 @@ export const projectsApi = {
       method: "POST",
     }),
 
-  feedback: (id: number, content: string, runId?: number) =>
+  feedback: (id: number, content: string, runId?: number, styleMode?: "cartoon" | "realistic") =>
     fetchApi<{ status: string }>(`/api/v1/projects/${id}/feedback`, {
       method: "POST",
-      body: JSON.stringify({ content, run_id: runId }),
+      body: JSON.stringify({ content, run_id: runId, style_mode: styleMode || "cartoon" }),
     }),
 };
 
@@ -151,10 +151,10 @@ export const shotsApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  regenerate: (id: number, type: "image" | "video") =>
+  regenerate: (id: number, type: "image" | "video", styleMode?: "cartoon" | "realistic") =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/shots/${id}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({ type }),
+      body: JSON.stringify({ type, style_mode: styleMode || "cartoon" }),
     }),
   delete: (id: number) =>
     fetchApi<void>(`/api/v1/shots/${id}`, { method: "DELETE" }),
@@ -167,10 +167,10 @@ export const charactersApi = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
-  regenerate: (id: number) =>
+  regenerate: (id: number, styleMode?: "cartoon" | "realistic") =>
     fetchApi<import("~/types").AgentRun>(`/api/v1/characters/${id}/regenerate`, {
       method: "POST",
-      body: JSON.stringify({ type: "image" }),
+      body: JSON.stringify({ type: "image", style_mode: styleMode || "cartoon" }),
     }),
   delete: (id: number) =>
     fetchApi<void>(`/api/v1/characters/${id}`, { method: "DELETE" }),

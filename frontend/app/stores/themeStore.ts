@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-type Theme = "doodle" | "doodle-dark";
+type Theme = "doodle" | "doodle-dark" | "cinematic" | "cinematic-light";
 
 interface ThemeState {
   theme: Theme;
@@ -14,7 +14,17 @@ export const useThemeStore = create<ThemeState>()(
     (set, get) => ({
       theme: "doodle",
       toggleTheme: () => {
-        const newTheme = get().theme === "doodle" ? "doodle-dark" : "doodle";
+        const currentTheme = get().theme;
+        let newTheme: Theme;
+        if (currentTheme === "doodle") {
+          newTheme = "doodle-dark";
+        } else if (currentTheme === "doodle-dark") {
+          newTheme = "doodle";
+        } else if (currentTheme === "cinematic") {
+          newTheme = "cinematic-light";
+        } else {
+          newTheme = "cinematic";
+        }
         document.documentElement.setAttribute("data-theme", newTheme);
         set({ theme: newTheme });
       },
@@ -26,7 +36,6 @@ export const useThemeStore = create<ThemeState>()(
     {
       name: "openoii-theme",
       onRehydrateStorage: () => (state) => {
-        // 恢复主题时应用到 DOM
         if (state?.theme) {
           document.documentElement.setAttribute("data-theme", state.theme);
         }

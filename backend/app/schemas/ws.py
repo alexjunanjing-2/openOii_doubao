@@ -16,6 +16,7 @@ WsEventType = Literal[
     "run_failed",
     "run_awaiting_confirm",  # 等待用户确认
     "run_confirmed",         # 用户已确认
+    "run_confirm_timeout",   # 等待确认超时
     "run_cancelled",         # 任务已取消
     "agent_handoff",         # Agent 交接
     "character_created",     # 角色创建
@@ -26,6 +27,7 @@ WsEventType = Literal[
     "shot_deleted",          # 分镜删除
     "project_updated",       # 项目更新（视频拼接完成等）
     "data_cleared",          # 数据清理（重新生成时）
+    "error",                 # 错误事件
 ]
 
 
